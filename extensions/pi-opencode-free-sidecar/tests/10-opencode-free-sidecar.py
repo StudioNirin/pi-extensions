@@ -192,8 +192,21 @@ else:
     probe_state = os.path.join(probe_dir, "state")
     with open(os.path.join(probe_dir, "settings.json"), "w", encoding="utf-8") as fh:
         json.dump({"packages": [REPO_DIR]}, fh, indent=2)
+    # Prefer the same credential the live agent dir uses: free-model quota
+    # is per credential, and the anonymous "public" bucket runs dry long
+    # before an account-backed one (verified 2026-11-12).
+    try:
+        live_auth = json.load(open(os.path.join(LIVE_AGENT_DIR, "auth.json"), encoding="utf-8"))
+    except Exception:
+        live_auth = {}
+    zen_key = "public"
+    for ent in (live_auth.get("opencode-zen"), live_auth.get("opencode")):
+        if isinstance(ent, dict) and ent.get("type") == "api_key" and ent.get("key") and ent["key"] != "public":
+            zen_key = ent["key"]
+            break
+    print(f"C0 probe credential: {'account key' if zen_key != 'public' else 'anonymous'}", flush=True)
     with open(os.path.join(probe_dir, "auth.json"), "w", encoding="utf-8") as fh:
-        json.dump({"opencode-zen": {"type": "api_key", "key": "public"}}, fh)
+        json.dump({"opencode-zen": {"type": "api_key", "key": zen_key}}, fh)
     probe_port = "8791"
     with open(os.path.join(probe_dir, "models.json"), "w", encoding="utf-8") as fh:
         json.dump({"providers": {"opencode-zen": {"baseUrl": f"http://127.0.0.1:{probe_port}/zen/v1"}}}, fh, indent=2)

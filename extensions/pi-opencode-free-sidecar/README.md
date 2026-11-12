@@ -84,9 +84,15 @@ updates cannot rotate a live secret.
 - pi with this package installed (`install.sh` in the repo root).
 - `~/.pi/agent/models.json` provider `opencode-zen` with `baseUrl` pointed
   at the relay (seeded by `install.sh`; the token header self-heals on load)
-  and a credential: `~/.pi/agent/auth.json` entry
-  `{"opencode-zen": {"type": "api_key", "key": "public"}}`, or
-  `export OPENCODE_API_KEY=public` for the anonymous free tier.
+  and a credential in `~/.pi/agent/auth.json`. **Recommended: your real
+  OpenCode account key** (the same one pi's built-in `opencode` provider
+  uses): free-model quota is tracked per credential, and the account bucket
+  matches what the OpenCode app gets. The anonymous
+  `{"type":"api_key","key":"public"}` (or `OPENCODE_API_KEY=public`) works
+  with no account but has a small per-IP bucket that empties fast. Either
+  way the transport gate still applies: a Node client 429s with a paid key
+  exactly as it does anonymously (verified 2026-11-12); the key changes the
+  quota bucket, not the class check.
 
 ## Commands
 
@@ -142,6 +148,31 @@ first.
 instance behaviour against a local sink, and the pi-level contract in an
 isolated agent dir, including one live Zen round trip through the relay and
 a killed-relay recovery.
+
+## Known limitations
+
+These belong to Zen's free tier and the text-protocol layer it forces, not
+to the relay; they are measured, not suspected (see the credential note
+above for why the key cannot fix them):
+
+- **Reliability ceiling.** Because the gate forbids native `tools`
+  declarations, tools ride as fenced ``` blocks in prompt text and long
+  histories are flattened into one transcript blob. Weaker free models
+  intermittently fail that contract: observed live (deepseek-v4.1-flash-free,
+  2026-11-12) were turns ending right after long thinking with zero content,
+  `toolUse` turns with no executable call, and models mimicking the
+  flattened-transcript markers (`[assistant tool call: ...]`) as fake
+  exchanges in their text. The fence rewriter is verifiably not swallowing
+  content (synthetic-stream test: closed fences convert, unclosed ones flush
+  as visible text). The clients that talk to Zen natively (the OpenCode app)
+  do not hit this because they use real function calling. Short sessions on
+  a strong free model are usable; long agentic sessions are not what the
+  free tier is good for. Use a paid provider for serious work.
+- **Quota is per credential and drifts.** Free-model catalog churns
+  (`422 Endpoint is unavailable` etc. for recently-seen ids), and buckets
+  empty at different rates per key/IP.
+- **Fingerprint rotation.** Upstream can change the client-class check at
+  any time; the relay is the current workaround, not a guarantee.
 
 ## Rollback
 
