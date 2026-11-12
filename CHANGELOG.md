@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 - 2026-11-12
+
+- Removed `pi-opencode-free-sidecar` (and with it the vendored
+  `@rabden/pi-opencode-zen` provider and the Bun transport relay).
+  Rationale: the OpenCode Zen free tier only serves third-party hosts a
+  heavily gated chat-lite shape (no native tools, assistant-role turns
+  refused, short history caps; measured rules are in the 0.2.0-era
+  extension README history). In practice the free models were unusable
+  for agentic work from pi, so the lane was dropped rather than
+  maintained. Free-model access on pi is now delegated to third-party
+  catalogs (for example `pi-freeflow`), which are outside this repo's
+  scope. Scenario 10 (relay contract) is retired with the extension;
+  `run.sh` discovery is by glob, so nothing else changes.
+- `install.sh` no longer seeds a Zen baseUrl; `models.json` provider
+  config is entirely the user's own.
+
 ## 0.2.0 - 2026-11-12
 
 - `pi-opencode-free-sidecar`: OpenCode Zen free models for any pi host.

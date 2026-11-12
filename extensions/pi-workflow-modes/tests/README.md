@@ -14,5 +14,3 @@
 # 03 resume write leak    07 pi-veto floor (tool + !cmd + floor.json)
 # 04 dialogs/subagents    08 ask-catalog drift across the three carriers
 #                         09 load order (veto before pps; no loose copies)
-#                         10 Zen relay + provider contract (lives in
-#                            ../../pi-opencode-free-sidecar/tests/)

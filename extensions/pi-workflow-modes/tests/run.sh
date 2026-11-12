@@ -11,7 +11,7 @@
 set -u
 cd "$(dirname "$0")"
 # Scenarios live next to their extension: this dir holds 01-09, sibling
-# extension tests dirs hold the rest (10 lives in pi-opencode-free-sidecar).
+# extension tests dirs may hold more.
 # Run order is by scenario number, regardless of which dir a script lives in.
 scenario_order() {
   for f in "$@"; do
