@@ -7,6 +7,7 @@ One **pi-package** carrying the extension stack that gives every pi runtime
 | --- | --- |
 | [`pi-workflow-modes`](extensions/pi-workflow-modes/README.md) | Per-session **plan / ask / build** modes: selection, the plan-file carve-out, scout-only subagent dispatch, and model-visible mode transitions. |
 | [`pi-veto`](extensions/pi-veto/README.md) | The **deny-only security floor**: catastrophic commands and credential/policy writes can never run, ask, or be allowed, including from `!cmd`. |
+| [`pi-opencode-free-sidecar`](extensions/pi-opencode-free-sidecar/README.md) | **OpenCode Zen free models on every host**: vendored provider (`@rabden/pi-opencode-zen`, MIT) plus an on-demand Bun transport relay, because Zen classifies free-tier clients by transport fingerprint and refuses Node-hosted pi. Replaces `npm:@rabden/pi-opencode-zen`. |
 
 Policy is layered, one authority per concern:
 
@@ -25,9 +26,12 @@ future UI (`pi-policy-console`).
 ```
 extensions/pi-workflow-modes/   mode selection, carve-out blocker, tests/
 extensions/pi-veto/             deny-only floor + floor.schema.json
+extensions/pi-opencode-free-sidecar/  Zen provider (vendor/) + Bun relay
+                                (relay.js) + tests/
 agents/                         generic example personas (build, worker,
                                 general-purpose, plan, ask, scout, Explore)
-install.sh                      register the package + seed agents/
+install.sh                      register the package + seed agents/ +
+                                seed the Zen relay baseUrl
 ```
 
 The `agents/*.md` files are not a pi-package resource: `pi-permission-system`
@@ -96,5 +100,16 @@ extensions/pi-workflow-modes/tests/run.sh
 
 Scenarios 01-09 cover mode switching, resume leaks, the `!cmd` gate, dialog
 round-trips, plan-file carve-out, mode transitions, the veto floor, catalog
-drift, and load order. They pin a model deliberately; set `PI_TEST_CWD` to a
+drift, and load order. Scenario 10 covers the Zen relay (auth, idle exit,
+provider load contract, one live Zen call; prints a skip note if `bun` is
+not installed). They pin a model deliberately; set `PI_TEST_CWD` to a
 scratch project if you do not want probe files in `$PWD`. See `tests/README.md`.
+
+## Zen free models
+
+`pi-opencode-free-sidecar` needs `bun` available on PATH or at
+`~/.local/bin/bun` (relay runtime only; pi itself does not use it), and
+replaces `npm:@rabden/pi-opencode-zen`: if that npm entry is still in
+`~/.pi/agent/settings.json`, remove it. See the
+[extension README](extensions/pi-opencode-free-sidecar/README.md) for the
+relay lifecycle, token gating, and `/opencode-free-sidecar`.

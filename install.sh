@@ -58,13 +58,51 @@ PY
 
 # 3. Remove loose auto-discovered copies. If both a loose dir and the package
 #    register the same tool, pi treats the duplicate name as fatal.
-for name in pi-workflow-modes pi-veto; do
+for name in pi-workflow-modes pi-veto pi-opencode-free-sidecar; do
   loose="$AGENT_DIR/extensions/$name"
   if [ -e "$loose" ]; then
     echo "removing loose extension dir: $loose"
     rm -rf "$loose"
   fi
 done
+
+# 3b. Zen relay prerequisites. bun runs the transport relay (pi itself does
+#     not need it); the models.json baseUrl decides where Zen requests go,
+#     and requests must reach the relay. Seed it only when the provider has
+#     no baseUrl yet (or --force): your provider config stays yours.
+if ! command -v bun >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/bun" ]; then
+  echo "WARNING: bun not found (PATH or ~/.local/bin/bun). Zen free models"
+  echo "         need the Bun relay; install bun from https://bun.sh"
+fi
+python3 - "$AGENT_DIR" "$FORCE" <<'PY'
+import json, os, sys
+
+agent_dir, force = sys.argv[1], int(sys.argv[2])
+path = os.path.join(agent_dir, "models.json")
+try:
+    with open(path, encoding="utf-8") as fh:
+        config = json.load(fh)
+except FileNotFoundError:
+    config = {}
+providers = config.setdefault("providers", {})
+zen = providers.setdefault("opencode-zen", {})
+relay = "http://127.0.0.1:8787/zen/v1"
+current = zen.get("baseUrl")
+if current is None or (force and current != relay):
+    zen["baseUrl"] = relay
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(config, fh, indent=2)
+        fh.write("\n")
+    os.replace(tmp, path)
+    print(f"seeded opencode-zen baseUrl -> {relay} in {path}")
+elif current != relay:
+    print(f"note: leaving your existing opencode-zen baseUrl as {current}")
+else:
+    print("opencode-zen baseUrl already points at the relay")
+PY
+# The relay's token header (x-zen-relay-token) is added to models.json by
+# the extension itself on first load, once the baseUrl above matches.
 
 # 4. Agent personas are not a pi-package resource. pi-permission-system and
 #    pi-subagents read them from <agent-dir>/agents/, so seed them there.
@@ -88,7 +126,11 @@ Next:
   1. Personalize the ask catalog in ~/.pi/agent/agents/*.md (see "Personalize"
      in this repo's README); the deployed files are yours, this repo only
      seeds them.
-  2. `pi` / PiChamber (restart its session daemon) / Orbit (restart)
-  3. /workflow-mode should report the active mode
-  4. run the regression gate: extensions/pi-workflow-modes/tests/run.sh
+  2. If you used npm:@rabden/pi-opencode-zen before, remove it from
+     settings.json packages: this package's pi-opencode-free-sidecar
+     replaces it and they must not both load.
+  3. `pi` / PiChamber (restart its session daemon) / Orbit (restart)
+  4. /workflow-mode should report the active mode; /opencode-free-sidecar
+     status should report the Bun relay
+  5. run the regression gate: extensions/pi-workflow-modes/tests/run.sh
 EOF

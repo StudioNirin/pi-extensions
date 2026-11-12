@@ -10,10 +10,19 @@
 #        ./run.sh 01         (one scenario by name prefix)
 set -u
 cd "$(dirname "$0")"
+# Scenarios live next to their extension: this dir holds 01-09, sibling
+# extension tests dirs hold the rest (10 lives in pi-opencode-free-sidecar).
+# Run order is by scenario number, regardless of which dir a script lives in.
+scenario_order() {
+  for f in "$@"; do
+    [ -e "$f" ] || continue
+    printf '%s\t%s\n' "$(basename "$f")" "$(realpath "$f")"
+  done | sort -u -k1,1 -k2,2 | cut -f2-
+}
 if [ "$#" -gt 0 ]; then
-  mapfile -t FILES < <(ls ./"$1"*.py 2>/dev/null)
+  mapfile -t FILES < <(scenario_order ./"$1"*.py ../../pi-*/tests/"$1"*.py 2>/dev/null)
 else
-  mapfile -t FILES < <(ls ./*.py | sort)
+  mapfile -t FILES < <(scenario_order ./*.py ../../pi-*/tests/*.py 2>/dev/null)
 fi
 [ "${#FILES[@]}" -eq 0 ] && { echo "no scenarios matched"; exit 2; }
 fail=0

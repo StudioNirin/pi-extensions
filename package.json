@@ -1,14 +1,19 @@
 {
   "name": "pi-extensions",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "One pi-package carrying the workflow-modes and deny-only security-floor extensions for pi, PiChamber, and Orbit",
-  "keywords": ["pi-package", "pi", "pi-extension", "permissions", "workflow"],
+  "description": "One pi-package carrying the workflow-modes and deny-only security-floor extensions and the OpenCode Zen free-model provider with Bun transport relay, for pi, PiChamber, and Orbit",
+  "keywords": ["pi-package", "pi", "pi-extension", "permissions", "workflow", "opencode-zen"],
   "license": "MIT",
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
   "pi": {
     "extensions": [
       "./extensions/pi-veto/index.ts",
-      "./extensions/pi-workflow-modes/index.ts"
+      "./extensions/pi-workflow-modes/index.ts",
+      "./extensions/pi-opencode-free-sidecar/index.ts"
     ]
   }
 }
