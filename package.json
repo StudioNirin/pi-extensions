@@ -1,0 +1,14 @@
+{
+  "name": "pi-extensions",
+  "version": "0.1.0",
+  "private": true,
+  "description": "One pi-package carrying the workflow-modes and deny-only security-floor extensions for pi, PiChamber, and Orbit",
+  "keywords": ["pi-package", "pi", "pi-extension", "permissions", "workflow"],
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./extensions/pi-veto/index.ts",
+      "./extensions/pi-workflow-modes/index.ts"
+    ]
+  }
+}

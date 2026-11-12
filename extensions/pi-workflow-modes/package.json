@@ -1,0 +1,9 @@
+{
+  "name": "pi-workflow-modes",
+  "version": "0.1.0",
+  "description": "Per-session plan/ask/build workflow modes keyed off active_agent signals for pi-permission-system",
+  "private": true,
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

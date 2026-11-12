@@ -1,0 +1,9 @@
+{
+  "name": "pi-veto",
+  "version": "0.1.0",
+  "description": "Deny-only, agent-immune security floor for pi: catastrophic commands and credential/policy writes can never run, ask, or be allowed",
+  "keywords": ["pi-package", "pi-extension", "security", "permissions"],
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pi-veto floor",
+  "description": "Additive DENY rules for pi-veto. Nothing outside 'deny' is read: the floor never asks and never allows.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "$comment": { "type": "string" },
+    "deny": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bash": {
+          "type": "array",
+          "description": "Glob patterns (same * and ? semantics as pps) matched against the whole command. A match is always denied.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "paths": {
+          "type": "array",
+          "description": "Path prefixes (leading ~ expanded) no write/edit tool or mutating bash command may touch.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
