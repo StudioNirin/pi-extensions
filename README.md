@@ -94,7 +94,9 @@ Orbit:
 extensions/pi-workflow-modes/tests/run.sh
 ```
 
-Scenarios 01-09 cover mode switching, resume leaks, the `!cmd` gate, dialog
+Scenarios 01-10 cover mode switching, resume leaks, the `!cmd` gate, dialog
 round-trips, plan-file carve-out, mode transitions, the veto floor, catalog
-drift, and load order. They pin a model deliberately; set `PI_TEST_CWD` to a
-scratch project if you do not want probe files in `$PWD`. See `tests/README.md`.
+drift, load order, and the read-only bash shapes (compound `cd && grep`
+allowed, writer/executor flags denied). They pin a model deliberately; set
+`PI_TEST_CWD` to a scratch project if you do not want probe files in `$PWD`.
+See `tests/README.md`.

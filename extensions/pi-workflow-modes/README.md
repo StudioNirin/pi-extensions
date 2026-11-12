@@ -55,9 +55,12 @@ depth - a resumed session that smuggles a stale tool set still cannot write):
    and no agent frontmatter can reach it.
 
 `!`/`!!` user-bash (and the RPC `bash` command) is gated by the `user_bash`
-handler: in plan/ask only a coarse read-only allowlist passes (fail-closed on
-anything unparseable); build mode passes through to pps. `pi-veto` checks the
-same commands first and blocks its floor in every mode.
+handler: in plan/ask only a read-only command allowlist passes, with per-command
+flag denies (`find -delete/-exec`, `rg --pre`, `sort -o`, `sed -i`, `tree -o`)
+since a bare name check would let `find . -delete` through; a `cd` segment is
+benign because every other segment of the chain is still judged on its own.
+Unparseable shapes fail closed; build mode passes through to pps. `pi-veto`
+checks the same commands first and blocks its floor in every mode.
 
 **Load order is load-bearing.** Extension handlers run in load order, and a
 blocked `tool_call` stops later handlers. The package lists `pi-veto` first and
@@ -144,6 +147,7 @@ Orbit - pps's config format has broken across majors before (see its
 | `07-veto.py` | pi-veto blocks `wipefs` (a command pps does not know) and `dd of=/dev/*` via `!cmd`; floor.json adds denies and ignores non-deny shapes |
 | `08-catalog-drift.py` | `build.md`, `worker.md`, and `general-purpose.md` carry byte-identical catalogs |
 | `09-load-order.py` | the package lists `pi-veto` first, settings lists the package before pps, and no loose copies shadow it (a block must preempt an ask dialog) |
+| `10-readonly-bash.py` | plan-mode compound `cd && grep` runs on both bash paths, while `find -delete`, `rg --pre`, `sed -n -i`, `$(...)` and `&& touch` leave every probe intact |
 
 They pin `--model basalt/Qwen3.8-Flash-Next-NVFP4` deliberately: pi's global
 "last used model" drifts with GUI use, and a wrong/empty model makes every

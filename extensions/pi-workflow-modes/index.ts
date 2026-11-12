@@ -46,28 +46,72 @@ const MODE_SUMMARY: Record<Mode, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// user_bash (!cmd) gating - read-only allowlist for plan/ask. Deliberately a
-// coarse prefix allowlist (fail-closed): the fine-grained pps patterns cover
-// tool bash calls; this closes the direct `!` execution hole for read-only
-// modes only. build mode deliberately passes through (pps policy is the
-// authority there, and `!cmd` is a user-initiated path).
+// user_bash (!cmd) gating - read-only allowlist for plan/ask. A command-name
+// allowlist plus per-command flag denies (fail-closed): the fine-grained pps
+// patterns cover tool bash calls; this closes the direct `!` execution hole
+// for read-only modes only. build mode deliberately passes through (pps policy
+// is the authority there, and `!cmd` is a user-initiated path).
 // ---------------------------------------------------------------------------
 
 const READONLY_COMMANDS = new Set([
 	"ls", "cat", "head", "tail", "wc", "rg", "grep", "find", "tree", "file",
 	"stat", "du", "df", "sort", "uniq", "cut", "tr", "diff", "jq", "basename",
-	"dirname", "realpath", "readlink", "which", "type", "echo", "pwd", "date",
-	"env", "printenv",
+	"dirname", "realpath", "readlink", "which", "type", "echo", "printf",
+	"pwd", "date", "env", "printenv",
 ]);
 const READONLY_GIT = new Set([
 	"status", "diff", "log", "show", "ls-files", "ls-tree", "rev-parse",
 	"remote", "branch", "blame", "describe", "tag",
 ]);
 
+// Flags that turn an allowlisted reader into a writer or an executor. On the
+// tool-bash path pps screens most of these itself (effect guards for find /
+// sort / sed, wrapper floors for find -exec) and the personas deny what pps
+// cannot see (rg --pre); this gate is the only check on the `!cmd` path, so
+// it screens all of them here. Caught: exact flags, `--flag=value`
+// attachments, and getopt_long abbreviations of long flags. Not caught:
+// exotic short-flag clusters (`sort -bo out`) - keep those out of read-only
+// modes.
+const DENIED_FLAGS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+	["find", new Set([
+		"-delete", "-exec", "-execdir", "-ok", "-okdir",
+		"-fprint", "-fprint0", "-fprintf", "-fls",
+	])],
+	["rg", new Set(["--pre", "--hostname-bin"])],
+	["sort", new Set(["-o", "--output"])],
+	["sed", new Set(["-i", "--in-place"])],
+	["tree", new Set(["-o", "--outfile"])],
+]);
+
+function hasDeniedFlag(cmd: string, words: readonly string[]): boolean {
+	const denied = DENIED_FLAGS.get(cmd);
+	if (denied === undefined) return false;
+	return words.some((word) => {
+		if (denied.has(word)) return true;
+		if (!word.startsWith("--")) return false;
+		// Compare the option stem: `--flag=value` is one word, and
+		// getopt_long resolves any unambiguous abbreviation, so `--out=`
+		// reaches `--output` just the same.
+		const stem = word.split("=")[0];
+		if (denied.has(stem)) return true;
+		for (const flag of denied) {
+			if (flag.startsWith("--") && (flag.startsWith(stem) || stem.startsWith(flag))) {
+				return true;
+			}
+		}
+		return false;
+	});
+}
+
 function segmentIsReadOnly(segment: string): boolean {
 	const words = segment.trim().split(/\s+/).filter(Boolean);
 	if (words.length === 0) return true;
 	const [cmd, sub] = words;
+	// cd only moves this shell's own directory, and every segment of the
+	// chain is judged separately here (as pps does for tool bash), so
+	// allowing cd cannot smuggle `cd x && rm y` past the rm segment.
+	if (cmd === "cd") return true;
+	if (hasDeniedFlag(cmd, words)) return false;
 	if (cmd === "sed") return sub === "-n";
 	if (cmd === "git") return sub !== undefined && READONLY_GIT.has(sub);
 	return READONLY_COMMANDS.has(cmd);

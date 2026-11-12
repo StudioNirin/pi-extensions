@@ -14,3 +14,5 @@
 # 03 resume write leak    07 pi-veto floor (tool + !cmd + floor.json)
 # 04 dialogs/subagents    08 ask-catalog drift across the three carriers
 #                         09 load order (veto before pps; no loose copies)
+#                         10 read-only bash (cd compounds allowed; -delete/
+#                            --pre/-i style flags denied on both bash paths)

@@ -36,6 +36,10 @@ permission:
     "wc *": allow
     "rg": allow
     "rg *": allow
+    # --pre/--hostname-bin make rg EXECUTE a program; pps's read-only effect
+    # guard for rg does not cover them, so they are denied explicitly.
+    "rg *--pre*": deny
+    "rg *--hostname-bin*": deny
     "grep": allow
     "grep *": allow
     "find": allow
@@ -50,6 +54,15 @@ permission:
     "du *": allow
     "sort": allow
     "sort *": allow
+    "echo": allow
+    "echo *": allow
+    "printf": allow
+    "printf *": allow
+    # cd only moves this shell's own directory. pps judges every unit of a
+    # chain separately, so allowing cd cannot smuggle `cd x && rm y`: the rm
+    # unit is still denied on its own rule.
+    "cd": allow
+    "cd *": allow
     "git status": allow
     "git status *": allow
     "git diff": allow

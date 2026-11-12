@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.0 - 2026-11-12
+
+- Read-only bash compounds in plan/ask no longer die on `cd`. The
+  "plan mode blocks grep" class of failures was always the command shape
+  `cd /abs/path && grep ...`: pps splits chains on `&&`/`;`/`|` and judges
+  every unit separately, so the leading `cd` unit hit `"*": deny` and
+  killed the whole command even though `grep` itself is allowlisted.
+  `plan.md`, `ask.md`, `scout.md`, and `Explore.md` now allowlist `cd`,
+  `cd *`, `printf`, and `printf *` (allowing `cd` cannot smuggle writes:
+  later chain units are still judged by their own rules).
+- Personas deny `rg *--pre*` and `rg *--hostname-bin*`. pps's read-only
+  effect guards cover `find -delete/-exec`, `sort -o`, and sed in-place,
+  but `rg --pre` (which EXECUTES a program per file) matches a plain
+  `"rg *"` allow on the assistant-bash path; the personas close that now.
+- `pi-workflow-modes` read-only gate (the `!cmd`/RPC `bash` path, where
+  this extension is the only read-only check) hardened the same way:
+  `printf` allowlisted, a bare `cd` segment is benign, and a per-command
+  flag denylist rejects writer/executor flags that the old name-only
+  check passed - notably `find -delete`, `rg --pre`, `sort -o`,
+  `sed -n -i` (the old `-n` prefix test let `-i` ride), and `tree -o`.
+  Long-flag abbreviations and `--flag=value` attachments are screened.
+- New scenario `10-readonly-bash.py`: plan-mode assertions on both bash
+  paths (assistant tool-bash through pps personas, `!cmd` through this
+  extension) that compound read-only chains run while every probe file
+  survives `find -delete`, `rg --pre`, `sed -n -i`, `$(touch ...)`, and
+  `&& touch`.
+
 ## 0.3.0 - 2026-11-12
 
 - Removed `pi-opencode-free-sidecar` (and with it the vendored

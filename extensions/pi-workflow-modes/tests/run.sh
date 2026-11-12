@@ -10,7 +10,7 @@
 #        ./run.sh 01         (one scenario by name prefix)
 set -u
 cd "$(dirname "$0")"
-# Scenarios live next to their extension: this dir holds 01-09, sibling
+# Scenarios live next to their extension: this dir holds 01-10, sibling
 # extension tests dirs may hold more.
 # Run order is by scenario number, regardless of which dir a script lives in.
 scenario_order() {
