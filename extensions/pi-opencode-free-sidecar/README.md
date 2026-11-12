@@ -151,26 +151,35 @@ a killed-relay recovery.
 
 ## Known limitations
 
-These belong to Zen's free tier and the text-protocol layer it forces, not
-to the relay; they are measured, not suspected (see the credential note
-above for why the key cannot fix them):
-
-- **Reliability ceiling.** Because the gate forbids native `tools`
-  declarations, tools ride as fenced ``` blocks in prompt text and long
-  histories are flattened into one transcript blob. Weaker free models
-  intermittently fail that contract: observed live (deepseek-v4.1-flash-free,
-  2026-11-12) were turns ending right after long thinking with zero content,
-  `toolUse` turns with no executable call, and models mimicking the
-  flattened-transcript markers (`[assistant tool call: ...]`) as fake
-  exchanges in their text. The fence rewriter is verifiably not swallowing
-  content (synthetic-stream test: closed fences convert, unclosed ones flush
-  as visible text). The clients that talk to Zen natively (the OpenCode app)
-  do not hit this because they use real function calling. Short sessions on
-  a strong free model are usable; long agentic sessions are not what the
-  free tier is good for. Use a paid provider for serious work.
+- **The free endpoint is shape-gated (measured 2026-11-12, direct probes):**
+  requests must use `stream: true`; messages may not contain any
+  `assistant`-role item; the array is capped at roughly 4 entries; `tools`
+  declarations are refused; the first message must be OpenCode's own
+  marker prompt verbatim (it is a title-generation prompt, which is why the
+  provider ships defusing preambles/reminders around it); and the API keeps
+  no server-side conversation state for this client class (a
+  same-`x-opencode-session` follow-up does not see the prior turn). These
+  four rules together are why a pi conversation can only be sent as
+  rabden's flattened single-user-message transcript with tools as text
+  protocol: there is no shape on this endpoint that carries native
+  multi-turn agent traffic. `429 FreeUsageLimitError` is the generic gate
+  refusal, not a quota signal: violating any shape rule (even just
+  `stream: false`) returns it with a fresh quota.
+- **Reliability ceiling.** Because of the above, weaker free models run
+  pi's conversation through prompt-text fences over a flattened transcript
+  and intermittently fail that contract: measured live (deepseek-v4.1-
+  flash-free, 2026-11-12): turns ending right after long thinking with
+  zero content, `toolUse` turns with no executable call, models mimicking
+  the flattened-transcript markers (`[assistant tool call: ...]`) as fake
+  exchanges, and occasional title-generator leakage (answering a question
+  with a title). The fence rewriter is verifiably not at fault (synthetic
+  stream test: closed fences convert, unclosed ones flush as visible text).
+  The OpenCode app does not hit these because the official client is the
+  gate's reference shape: native tools in its own byte-exact toolset, no
+  assistant-role items to smuggle, no marker contamination.
 - **Quota is per credential and drifts.** Free-model catalog churns
-  (`422 Endpoint is unavailable` etc. for recently-seen ids), and buckets
-  empty at different rates per key/IP.
+  (`422 Endpoint is unavailable` etc. for recently-seen ids); the
+  anonymous `public` bucket is small (confirmed exhaustion today).
 - **Fingerprint rotation.** Upstream can change the client-class check at
   any time; the relay is the current workaround, not a guarantee.
 
