@@ -12,8 +12,7 @@
   "pi": {
     "extensions": [
       "./extensions/pi-veto/index.ts",
-      "./extensions/pi-workflow-modes/index.ts",
-      "./extensions/token-speed/index.ts"
+      "./extensions/pi-workflow-modes/index.ts"
     ]
   }
 }

@@ -8,6 +8,7 @@ not cosmetics.
 
 Pass criteria in printed output:
   - the package manifest lists pi-veto before pi-workflow-modes
+  - every path in the manifest's pi.extensions list exists on disk
   - settings.json lists our package before pi-permission-system
   - no loose copies of the two extensions shadow the package
 """
@@ -56,7 +57,12 @@ else:
     print(f"M1 manifest order veto={veto} modes={modes}: {order_ok}", flush=True)
     print(f"M2 manifest: {manifest_path}", flush=True)
     print(f"M3 extensions listed: {extensions}", flush=True)
-    ok = ok and order_ok
+    # A listed path that does not exist is skipped silently by pi, so a deleted
+    # extension with a stale manifest line looks healthy everywhere except here.
+    missing = [path for path in extensions
+               if not os.path.exists(os.path.join(manifest_path, path))]
+    print(f"M4 every listed extension exists: {not missing}", f"(missing {missing})", flush=True)
+    ok = ok and order_ok and not missing
 
 # --- 2. Settings order: our package before pps ---
 our_index = None
