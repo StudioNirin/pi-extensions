@@ -96,10 +96,20 @@ fixes:
 - `npm:pi-token-speed` writes one `setStatus` footer segment. Configured by the
   `tokenSpeed` block in `~/.pi/agent/settings.json`: `updateInterval: 80`
   (it ships `0`, which redraws on every delta), `slidingWindow: 5000` with a
-  wider `providerOverrides.basalt` window, `endTpsBehavior: "average"`.
+  wider `providerOverrides.basalt` window, `endTpsBehavior: "average"`, and
+  `display: "full"` for the `(150 tok in 6.0s · TTFT: 450 ms)` suffix. The four
+  modes are `tps`, `ttft`, `stats` and `full`, and they only change the suffix:
+  the primary value is always the rate.
 - `npm:pi-token-rate` draws a sparkline widget with EMA smoothing, median,
   percentile, peak and cost, and folds in pi-subagents child usage. It has no
   settings key; use `/token-rate` for on/off, position, detail and window.
+
+Where each one lands in PiChamber, from its `extension-bridge.js`: `setStatus`
+publishes `extension.status` and renders as a footer chip, always visible next
+to the mode chip. `setWidget` publishes `extension.widget` and renders as a card
+in the Extensions panel, opened by the `1 widget` chip, with the `placement`
+value shown as a label. No widget draws inline above the composer there, so the
+footer is the only always-visible surface.
 
 `pi-token-rate` renders through a component factory, which RPC mode ignores
 (`rpc-extension-ui.md`: only string arrays are supported), so it draws in the

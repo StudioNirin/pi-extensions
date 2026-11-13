@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.3 - 2026-11-13
+
+- `pi-workflow-modes` no longer carries Orbit mode-authority interop: the
+  `orbit:workflow` entry comparison, the `ORBIT_BUNDLED_EXTENSIONS` /
+  `ORBIT_WORKFLOW_MODE` detection, the mirror-through-`before_agent_start`
+  branch and the `(Orbit chip)` status suffix are gone. `resolveMode` knows only
+  our own `active_agent` entries and the `build` default, and
+  `Resolution.authority` is `"own" | "default"`. Orbit is uninstalled.
+- The `token-speed` path was still listed in `pi.extensions` after the vendored
+  file was deleted. pi skips an unresolvable package-internal path with no
+  warning, so nothing appeared broken. Scenario 09 gained M4, which fails if any
+  listed extension path does not exist.
+- Scenario 05 gained the two plan-carve-out cases that were missing: an
+  **absolute** `<cwd>/.plans/` write (agents pass absolute paths, and pps only
+  matches the persona's relative `.plans/*` rule when the path lies inside the
+  session cwd), and a nested one. Both are allowed: pps compiles `*` to `.*`
+  with the `s` flag, so a path wildcard crosses separators.
+- Scenario 14's width check now judges only the rate segment, up to `tok/s`,
+  because `display: "full"` legitimately changes the whole line's length as the
+  token and elapsed digits change. The total width is reported without a verdict.
+- README documents the four `tokenSpeed.display` modes and where each meter
+  lands in PiChamber: `setStatus` is a footer chip, `setWidget` is a card in the
+  Extensions panel, and no widget draws inline above the composer there.
+
 ## 0.4.2 - 2026-11-13
 
 - The footer tok/s readout is no longer vendored code: it is two floating
