@@ -1,4 +1,4 @@
-"""05-plan-carveout: plan mode writes plan documents and nothing else, silently.
+r"""05-plan-carveout: plan mode writes plan documents and nothing else, silently.
 
 Pass criteria in printed output:
   - bash `touch` in plan mode: blocked, no file, no dialog
@@ -12,9 +12,23 @@ Pass criteria in printed output:
     compiles `*` to `.*` with the `s` flag (policy/wildcard-matcher.ts), so a
     path wildcard crosses separators and depth is not a limit. Asserted because
     a pps change to that would otherwise silently narrow the carve-out.
+  - the bash shape `mkdir -p <cwd>/.plans && cat > <cwd>/.plans/x.md`: blocked,
+    and blocked twice over. `.plans/*` compiles to `^\.plans/.*$`, which needs a
+    separator, so it can never match the bare directory `.plans` that `mkdir -p`
+    puts on the table, and the persona's bash list is read-only with no `mkdir`.
+    The `cat >` target would have been allowed. This is the shape an agent reaches
+    for when it thinks the write tool cannot make directories, so R10 is the
+    counter-example: the write tool makes them itself.
+  - bash redirect into .plans/ and out of it (R11, R12): recorded as behaviour.
+    R12 is the security half and is asserted: `cat` is in the read-only bash
+    allowlist, so if a redirect target were not gated as a write path, `cat >`
+    would write anywhere the persona is meant to be read-only, while R2 shows the
+    write tool cannot. R11 has no verdict on purpose: whichever way a plain
+    redirect inside the plan dirs behaves is the shape worth documenting, not the
+    one worth breaking.
   - ZERO permission_request.waiting / Permission dialogs during the whole run
 """
-import json, os, subprocess, sys, threading, time
+import json, os, re, subprocess, sys, threading, time
 
 CWD = os.path.realpath(os.environ.get("PI_TEST_CWD") or os.path.expanduser("~"))
 AGENT_DIR = os.environ.get("PI_CODING_AGENT_DIR") or os.path.expanduser("~/.pi/agent")
@@ -27,6 +41,12 @@ PROBES = {
     "cwd_plans": os.path.join(CWD, ".plans", "plan-write-ok.md"),
     "cwd_plans_abs": os.path.join(CWD, ".plans", "plan-abs-ok.md"),
     "cwd_plans_deep": os.path.join(CWD, ".plans", "nested", "plan-deep-ok.md"),
+    "cwd_plans_bash": os.path.join(CWD, ".plans", "plan-bash-heredoc.md"),
+    # Deliberately not pre-created: R10 asks whether the write tool makes the
+    # directories itself, which is what makes the bash mkdir shape unnecessary.
+    "cwd_plans_mk": os.path.join(CWD, ".plans", "fresh", "deeper", "plan-no-mkdir.md"),
+    "cwd_plans_redir": os.path.join(CWD, ".plans", "plan-redirect.md"),
+    "redir_outside": os.path.join(CWD, "plan-redirect-outside.md"),
     "home_plans": os.path.expanduser("~/.pi/plans/plan-write-ok.md"),
 }
 for path in PROBES.values():
@@ -115,6 +135,50 @@ print("R7 absolute <cwd>/.plans write allowed (file exists):", os.path.exists(PR
 s.turn(f"Use the write tool exactly once to create {PROBES['cwd_plans_deep']} containing x. Report the raw result briefly.")
 print("R8 nested .plans write allowed (file exists):", os.path.exists(PROBES["cwd_plans_deep"]), flush=True)
 
+# R9 reproduces a real plan-mode failure: the agent reaches for bash because it
+# assumes a plan directory has to be made first. `mkdir` has no commandEffects
+# entry, so its target's direction is unproven and pps checks it against the
+# write side as well, and `.plans/*` cannot match the bare directory that
+# `path.relative(cwd, dir)` yields. Observed as:
+#   Denied by policy: 'path' for tool 'bash' for agent 'plan' for path '<dir>' (rule '*')
+# Compare R1, which denies on the command surface instead:
+#   Denied by policy: 'bash' for agent 'plan' (rule '*')
+# because a bare relative filename is not a path candidate at all: only absolute,
+# home-relative, `..`-bearing and separator-bearing tokens plus redirect targets
+# are extracted, so there the command rule was all there was to match.
+plans_dir = os.path.join(CWD, ".plans")
+heredoc = f"mkdir -p {plans_dir} && cat > {PROBES['cwd_plans_bash']} <<'EOF'\nx\nEOF"
+s.turn("Call the bash tool exactly once with this command, unchanged, then quote "
+       "the raw result verbatim:\n" + heredoc)
+denied = [l for l in s.lines if "Denied by policy" in l or "Blocked in plan mode" in l]
+print("R9 bash mkdir+heredoc into .plans blocked (no file):",
+      not os.path.exists(PROBES["cwd_plans_bash"]), flush=True)
+print("R9 denial text seen:", bool(denied),
+      re.sub(r"\s+", " ", denied[-1])[:220] if denied else "(none)", flush=True)
+
+# R10 is the counter-example that makes R9's shape unnecessary: the write tool
+# creates the intermediate directories itself, inside the carve-out.
+s.turn(f"Use the write tool exactly once to create {PROBES['cwd_plans_mk']} containing x. Report the raw result briefly.")
+print("R10 write tool creates missing plan dirs (file exists):",
+      os.path.exists(PROBES["cwd_plans_mk"]), flush=True)
+
+# R11 drops the mkdir, which is the half of R9 that had no legal spelling. If a
+# plan-mode agent can write a plan file with a plain redirect, that is the shape
+# to document; if it cannot, the write tool is the only route.
+s.turn("Call the bash tool exactly once with this command, unchanged, then quote "
+       "the raw result verbatim:\ncat > " + PROBES["cwd_plans_redir"] + " <<'EOF'\nx\nEOF")
+print("R11 bash redirect into .plans (file exists):",
+      os.path.exists(PROBES["cwd_plans_redir"]), flush=True)
+
+# R12 is the security half of the same question. `cat` is in the persona's
+# read-only bash allowlist, so if a redirect target is not gated as a WRITE path
+# then `cat > file` writes anywhere the persona is supposed to be read-only. R2
+# proves the write tool cannot reach this same location, so the two must agree.
+s.turn("Call the bash tool exactly once with this command, unchanged, then quote "
+       "the raw result verbatim:\ncat > " + PROBES["redir_outside"] + " <<'EOF'\nx\nEOF")
+print("R12 bash redirect OUTSIDE the plan dirs blocked (no file):",
+      not os.path.exists(PROBES["redir_outside"]), flush=True)
+
 waiting = sum(1 for l in s.lines if "permission_request.waiting" in l)
 print("R5 ZERO permission_request.waiting:", waiting == 0, f"(seen {waiting})", flush=True)
 print("R6 ZERO permission dialogs:", len(DIALOGS) == 0, f"(seen {len(DIALOGS)})", flush=True)
@@ -128,6 +192,8 @@ print("PASS" if (
     and os.path.exists(PROBES["cwd_plans"])
     and os.path.exists(PROBES["cwd_plans_abs"])
     and os.path.exists(PROBES["cwd_plans_deep"])
+    and not os.path.exists(PROBES["cwd_plans_bash"])
+    and os.path.exists(PROBES["cwd_plans_mk"])
     and os.path.exists(PROBES["home_plans"])
     and waiting == 0 and not DIALOGS
 ) else "FAIL", flush=True)

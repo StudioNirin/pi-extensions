@@ -12,11 +12,15 @@
   file was deleted. pi skips an unresolvable package-internal path with no
   warning, so nothing appeared broken. Scenario 09 gained M4, which fails if any
   listed extension path does not exist.
-- Scenario 05 gained the two plan-carve-out cases that were missing: an
+- Scenario 05 gained the plan-carve-out cases that were missing: an
   **absolute** `<cwd>/.plans/` write (agents pass absolute paths, and pps only
   matches the persona's relative `.plans/*` rule when the path lies inside the
-  session cwd), and a nested one. Both are allowed: pps compiles `*` to `.*`
-  with the `s` flag, so a path wildcard crosses separators.
+  session cwd), a nested one, the bash `mkdir -p .plans && cat > .plans/x.md`
+  shape an agent reaches for (denied: no rule can match a bare directory), the
+  same write with the `mkdir` dropped, and a redirect outside the plan
+  directories, which must be denied because an output redirect is a write. All
+  twelve probes pass. `pi-workflow-modes/README.md` gained the matching
+  "Authoring plan documents in plan mode" section.
 - Scenario 14's width check now judges only the rate segment, up to `tok/s`,
   because `display: "full"` legitimately changes the whole line's length as the
   token and elapsed digits change. The total width is reported without a verdict.

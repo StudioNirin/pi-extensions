@@ -78,6 +78,36 @@ catalog's deny mirrors would suppress most of those dialogs anyway; the order
 makes it true for every veto-covered command, including the ones the mirrors
 cannot express without matching legitimate paths.
 
+### Authoring plan documents in plan mode
+
+Plan mode exists to write plan documents, so the carve-out is the one thing in
+the read-only posture that must not surprise you. Verified by scenario 05:
+
+- **Use `write`.** Any path under `<cwd>/.plans/` or `~/.pi/plans/` is allowed,
+  at any depth, and `write` creates the directories it needs on the way.
+- **`mkdir -p <cwd>/.plans` is denied, and always will be.** `.plans/*` compiles
+  to `^\.plans/.*$`, which needs the separator, so no rule can match the bare
+  directory that `mkdir` names; `"*": deny` wins. This is the denial that reads
+  like "the carve-out is broken". It is not: drop the `mkdir` and the same write
+  succeeds.
+- A bash **output redirect** consults the `path_write` surface, so
+  `cat > <cwd>/.plans/x.md` works and `cat > <cwd>/x.md` is denied. It is pps's
+  rule though, not this extension's: the `tool_call` blocker only inspects
+  `write`/`edit` paths, so the redirect stays inside the carve-out exactly as
+  long as `path_write` says it does.
+- Two different messages, both correct. A command whose effect pps cannot
+  classify reports a **path** denial naming the directory; a bare relative
+  filename is not a path candidate at all (only absolute, `~/`, `..`-bearing,
+  separator-bearing tokens and redirect targets are extracted), so that one
+  reports the **command** rule instead.
+- `<cwd>/.plans` means **this session's** cwd. pps derives a project-relative
+  alias for an absolute path only when the path lies strictly inside the session
+  cwd (`access-intent/path-normalization.ts:97`), so a `.plans` directory
+  belonging to another project has nothing to match the persona's relative rule
+  and is denied. `~/.pi/plans/` is absolute and works from anywhere, which is
+  why it looks like the only one that works when a session is opened in the
+  wrong place.
+
 ### Global policy shape
 
 The global pps config is the fail-closed base; the personas narrow or widen it
