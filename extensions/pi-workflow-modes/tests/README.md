@@ -9,7 +9,9 @@
 #   PI_TEST_TRACE         trace file for 06 (default: $TMPDIR/wf-mode-trace.jsonl)
 #   PI_AGENTS_DIR         agents dir for 08 drift check (default: <agent dir>/agents)
 #
-# 01 mode switch          05 plan-file carve-out (silent denies, no dialogs)
+# 01 mode switch          05 plan-file carve-out (silent denies, no dialogs;
+#                            project plan dir allowed relative, absolute and
+#                            nested, everything else denied)
 # 02 resume + !cmd gate   06 mode-transition notice reaches the model
 # 03 resume write leak    07 pi-veto floor (tool + !cmd + floor.json)
 # 04 dialogs/subagents    08 ask-catalog drift across the three carriers
@@ -17,4 +19,5 @@
 #                         10 read-only bash (cd compounds allowed; -delete/
 #                            --pre/-i style flags denied on both bash paths)
 # 11 plan-mode !cmd gate   14 throughput meters (installed floating, no tools,
-#                            redraw rate <= 15/s, number jitter, rendered width)
+#                            redraw rate <= 15/s, number jitter, rate-segment
+#                            width)

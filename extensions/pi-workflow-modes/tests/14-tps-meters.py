@@ -22,7 +22,10 @@ Pass criteria in printed output:
   - M1 the setStatus meter produced at least 5 samples during a streamed turn
   - M2 its peak redraw rate stayed at or under 15 updates in any one second
   - M3 its number did not jump more than 45% of its own observed range
-  - M4 its rendered width took at most 8 distinct lengths
+  - M4 the rate part of its line, everything up to "tok/s", took at most 8
+    distinct widths. With the meter configured display=full the whole line
+    legitimately changes length as token and elapsed digits change, so the total
+    is printed without a verdict
   - N1 pi-token-rate loaded without an extension error and drew nothing over RPC
 """
 import json, os, re, subprocess, sys, threading, time
@@ -179,9 +182,21 @@ if len(rates) > WARMUP_SAMPLES:
     limit = MAX_JITTER_FRACTION * max(span_range, 1.0)
     check("M3 readout did not swing", worst <= limit,
           f"max jump={worst:.1f} tok/s limit={limit:.1f} range={span_range:.1f} min={min(r[1] for r in warm):.1f} max={max(r[1] for r in warm):.1f}")
-    widths = sorted({len(r[2]) for r in rates})
-    check("M4 rendered width steady", len(widths) <= MAX_DISTINCT_WIDTHS, f"distinct widths={len(widths)} {widths[:12]}")
-    info("M3/M4 sample", rates[len(rates) // 2][2][:120])
+    ANSI = re.compile(r"\x1b\[[0-9;]*m")
+    def segment(value):
+        # The part of the line whose length should not move as a side effect of
+        # the number itself: everything up to and including "tok/s".
+        clean = ANSI.sub("", value)
+        cut = clean.find("tok/s")
+        return clean[: cut + 5] if cut >= 0 else clean
+    widths = sorted({len(segment(r[2])) for r in rates})
+    check("M4 rate display width steady", len(widths) <= MAX_DISTINCT_WIDTHS,
+          f"distinct widths={len(widths)} {widths[:12]}")
+    # display=full legitimately changes the total length: the token count and
+    # elapsed digits are content, not jitter. Report it, judge nothing.
+    info("M4 full line widths (no verdict)",
+         str(sorted({len(ANSI.sub("", r[2])) for r in rates})[:12]))
+    info("M3/M4 sample", ANSI.sub("", rates[len(rates) // 2][2])[:120])
 else:
     check("M3 readout did not swing", False, f"parsable tok/s samples={len(rates)}")
     check("M4 rendered width steady", False, "no parsable samples")

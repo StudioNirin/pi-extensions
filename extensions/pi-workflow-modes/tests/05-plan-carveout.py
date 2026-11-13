@@ -5,6 +5,13 @@ Pass criteria in printed output:
   - write tool to a project path: blocked, no file
   - write tool to <cwd>/.plans/: allowed
   - write tool to ~/.pi/plans/: allowed
+  - write tool to an ABSOLUTE <cwd>/.plans/ path: allowed (agents pass absolute
+    paths, and pps only matches the persona's relative `.plans/*` rule when the
+    absolute path lies inside the session cwd, so this is the realistic case)
+  - nested depth under .plans/: allowed. The persona rule is `.plans/*` and pps
+    compiles `*` to `.*` with the `s` flag (policy/wildcard-matcher.ts), so a
+    path wildcard crosses separators and depth is not a limit. Asserted because
+    a pps change to that would otherwise silently narrow the carve-out.
   - ZERO permission_request.waiting / Permission dialogs during the whole run
 """
 import json, os, subprocess, sys, threading, time
@@ -18,12 +25,16 @@ PROBES = {
     "bash": os.path.join(CWD, "plan-bash-probe.txt"),
     "project": os.path.join(CWD, "plan-write-probe.md"),
     "cwd_plans": os.path.join(CWD, ".plans", "plan-write-ok.md"),
+    "cwd_plans_abs": os.path.join(CWD, ".plans", "plan-abs-ok.md"),
+    "cwd_plans_deep": os.path.join(CWD, ".plans", "nested", "plan-deep-ok.md"),
     "home_plans": os.path.expanduser("~/.pi/plans/plan-write-ok.md"),
 }
 for path in PROBES.values():
     try: os.remove(path)
     except OSError: pass
-os.makedirs(os.path.join(CWD, ".plans"), exist_ok=True)
+# The deep parent exists up front so R8 answers the permission question only,
+# not whether the write tool creates intermediate directories.
+os.makedirs(os.path.join(CWD, ".plans", "nested"), exist_ok=True)
 os.makedirs(os.path.expanduser("~/.pi/plans"), exist_ok=True)
 
 DIALOGS = []
@@ -93,6 +104,17 @@ print("R3 plan-dir write allowed (file exists):", os.path.exists(PROBES["cwd_pla
 s.turn(f"Use the write tool exactly once to create {PROBES['home_plans']} containing x. Report the raw result briefly.")
 print("R4 home plan-dir write allowed (file exists):", os.path.exists(PROBES["home_plans"]), flush=True)
 
+# R7 is the spelling a real agent produces: the same project plan directory,
+# absolute. R3 spells it relative, which the persona rule matches directly.
+s.turn(f"Use the write tool exactly once to create {PROBES['cwd_plans_abs']} containing x. Report the raw result briefly.")
+print("R7 absolute <cwd>/.plans write allowed (file exists):", os.path.exists(PROBES["cwd_plans_abs"]), flush=True)
+
+# R8: depth is not a limit. `.plans/*` compiles to `\.plans/.*` with the `s`
+# flag, so the wildcard crosses separators; the parent dir is created up front
+# so a failure here can only mean the path was not allowed.
+s.turn(f"Use the write tool exactly once to create {PROBES['cwd_plans_deep']} containing x. Report the raw result briefly.")
+print("R8 nested .plans write allowed (file exists):", os.path.exists(PROBES["cwd_plans_deep"]), flush=True)
+
 waiting = sum(1 for l in s.lines if "permission_request.waiting" in l)
 print("R5 ZERO permission_request.waiting:", waiting == 0, f"(seen {waiting})", flush=True)
 print("R6 ZERO permission dialogs:", len(DIALOGS) == 0, f"(seen {len(DIALOGS)})", flush=True)
@@ -104,6 +126,8 @@ print("PASS" if (
     not os.path.exists(PROBES["bash"])
     and not os.path.exists(PROBES["project"])
     and os.path.exists(PROBES["cwd_plans"])
+    and os.path.exists(PROBES["cwd_plans_abs"])
+    and os.path.exists(PROBES["cwd_plans_deep"])
     and os.path.exists(PROBES["home_plans"])
     and waiting == 0 and not DIALOGS
 ) else "FAIL", flush=True)
