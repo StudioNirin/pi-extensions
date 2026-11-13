@@ -1,4 +1,4 @@
-import json, subprocess, threading, time, os, re, sys
+import json, subprocess, threading, time, os, re, stat, sys
 
 CWD = os.path.realpath(os.environ.get("PI_TEST_CWD") or os.path.expanduser("~"))
 AGENT_DIR = os.environ.get("PI_CODING_AGENT_DIR") or os.path.expanduser("~/.pi/agent")
@@ -7,8 +7,8 @@ SESSION_GLOB = os.path.join(AGENT_DIR, "sessions",
     "--" + CWD.lstrip("/").replace("/", "-") + "--", "*.jsonl")
 PROBE1 = os.path.join(CWD, "pps-probe.txt")
 PROBE2 = os.path.join(CWD, "pps-probe2.txt")
-SCOUT = os.path.join(CWD, "scout-probe.md")
-for f in (PROBE1, PROBE2, SCOUT):
+EXPLORE = os.path.join(CWD, "explore-probe.md")
+for f in (PROBE1, PROBE2, EXPLORE):
     try: os.remove(f)
     except: pass
 
@@ -110,62 +110,64 @@ s.send({"id":2,"type":"prompt","message":"/workflow-mode"}); time.sleep(3)
 mode_notice = next((n for n in s.notices if "workflow mode" in n), "?")
 print("P0 workflow-mode notice:", mode_notice, flush=True)
 
-# ---- P1: ask dialog, APPROVE ----
+# ---- P1: ask dialog, APPROVE (chmod stays an ask; rm is location-scoped) ----
 turn("Call the bash tool exactly once with this command and report the raw result: touch pps-probe.txt")
 print("P1a touch allowed silently, file exists:", os.path.exists(PROBE1), flush=True)
 n_dialog_before = len(DIALOGS)
 ANSWER["current"] = "Yes"
-turn("Call the bash tool exactly once with this command and report the raw result: rm -f pps-probe.txt")
+turn("Call the bash tool exactly once with this command and report the raw result: chmod 600 pps-probe.txt")
 p1_dialogs = len(DIALOGS) - n_dialog_before
-print("P1b rm: dialogs seen:", p1_dialogs, "| file gone:", not os.path.exists(PROBE1), flush=True)
+p1_mode = stat.S_IMODE(os.stat(PROBE1).st_mode) if os.path.exists(PROBE1) else -1
+print("P1b chmod: dialogs seen:", p1_dialogs, "| mode now:", oct(p1_mode), flush=True)
 
 # ---- P2: ask dialog, DENY ----
 turn("Call the bash tool exactly once with this command and report the raw result: touch pps-probe2.txt")
 n_dialog_before = len(DIALOGS)
 ANSWER["current"] = "No"
-turn("Call the bash tool exactly once with this command and report the raw result: rm -f pps-probe2.txt")
+turn("Call the bash tool exactly once with this command and report the raw result: chmod 777 pps-probe2.txt")
 p2_dialogs = len(DIALOGS) - n_dialog_before
-print("P2 rm denied via dialog: dialogs seen:", p2_dialogs, "| file still exists:", os.path.exists(PROBE2), flush=True)
-# cleanup through the user_bash RPC path (build mode passes it)
-s.send({"id":90,"type":"bash","command":"rm -f pps-probe2.txt"}); time.sleep(3)
-print("P2 cleanup via rpc bash, file gone:", not os.path.exists(PROBE2), flush=True)
+p2_mode = stat.S_IMODE(os.stat(PROBE2).st_mode) if os.path.exists(PROBE2) else -1
+print("P2 chmod denied via dialog: dialogs seen:", p2_dialogs, "| mode stayed:", oct(p2_mode), flush=True)
+# cleanup: rm is silent in-project now, but this also exercises the rpc path
+s.send({"id":90,"type":"bash","command":"rm -f pps-probe2.txt pps-probe.txt"}); time.sleep(3)
+print("P2 cleanup via rpc bash, files gone:", not os.path.exists(PROBE2) and not os.path.exists(PROBE1), flush=True)
 
-# ---- P3: worker forwarded approval (retry for model cooperation) ----
+# ---- P3: general-purpose forwarded approval (retry for model cooperation) ----
 WORKER_PROMPTS = [
- 'Use the subagent tool ONCE with subagent_type worker. Its prompt: "Run exactly this bash command: sh -c \'echo hi-worker\'. Report the output." Wait for the result and relay it.',
- 'Call the tool named "subagent" directly - do not use bash first. subagent_type: worker. prompt: "Run exactly: sh -c \'echo hi-worker\'. Report the output." description: "worker echo". Wait for the result and relay the output verbatim.',
+ 'Use the subagent tool ONCE with subagent_type general-purpose. Its prompt: "Run exactly this bash command: sh -c \'echo hi-child\'. Report the output." Wait for the result and relay it.',
+ 'Call the tool named "subagent" directly - do not use bash first. subagent_type: general-purpose. prompt: "Run exactly: sh -c \'echo hi-child\'. Report the output." description: "delegated echo". Wait for the result and relay the output verbatim.',
 ]
 ANSWER["current"] = "Yes"
-worker_ok = False
+forwarded_ok = False
 for attempt in (1,2,3,4):
     nd = len(DIALOGS); nc = s.subagent_calls()
     ok = turn(WORKER_PROMPTS[(attempt-1) % 2], timeout=340)
     t = s.texts()
-    relayed = any("hi-worker" in x for x in t[-2:]) if t else False
+    relayed = any("hi-child" in x for x in t[-2:]) if t else False
     fwd = any("Subagent" in d[0] for d in DIALOGS[nd:])
     real = s.subagent_calls() > nc
     print(f"P3 attempt {attempt}: turn_end={ok} real_subagent_call={real} fwd_dialog={fwd} relayed={relayed}", flush=True)
     if real and relayed:
-        worker_ok = True; break
-print("P3 worker forwarding:", "PASS" if worker_ok else "FAIL", flush=True)
+        forwarded_ok = True; break
+print("P3 forwarded approval:", "PASS" if forwarded_ok else "FAIL", flush=True)
 
-# ---- P4: scout child cannot write ----
-for f in (SCOUT,): 
+# ---- P4: Explore child cannot write ----
+for f in (EXPLORE,): 
     try: os.remove(f)
     except: pass
-SCOUT_PROMPTS = [
- 'Use the subagent tool ONCE with subagent_type scout. Its prompt: "Write the word hi into scout-probe.md using your write tool, then report what happened." Relay its report.',
- 'Call the tool named "subagent" directly - do not use bash. subagent_type: scout. prompt: "Write the word hi into scout-probe.md using your write tool, then report what happened." description: "scout write test". Wait for the result and relay its report in one sentence.',
+EXPLORE_PROMPTS = [
+ 'Use the subagent tool ONCE with subagent_type Explore. Its prompt: "Write the word hi into explore-probe.md using your write tool, then report what happened." Relay its report.',
+ 'Call the tool named "subagent" directly - do not use bash. subagent_type: Explore. prompt: "Write the word hi into explore-probe.md using your write tool, then report what happened." description: "explore write test". Wait for the result and relay its report in one sentence.',
 ]
-scout_ok = False
+explore_ok = False
 for attempt in (1,2,3,4):
     nc = s.subagent_calls()
-    ok = turn(SCOUT_PROMPTS[(attempt-1) % 2], timeout=340)
+    ok = turn(EXPLORE_PROMPTS[(attempt-1) % 2], timeout=340)
     real = s.subagent_calls() > nc
-    print(f"P4 attempt {attempt}: turn_end={ok} real_subagent_call={real} scout file exists={os.path.exists(SCOUT)}", flush=True)
+    print(f"P4 attempt {attempt}: turn_end={ok} real_subagent_call={real} explore file exists={os.path.exists(EXPLORE)}", flush=True)
     if real:
-        scout_ok = not os.path.exists(SCOUT); break
-print("P4 scout write-blocked:", "PASS" if scout_ok else "FAIL", flush=True)
+        explore_ok = not os.path.exists(EXPLORE); break
+print("P4 Explore write-blocked:", "PASS" if explore_ok else "FAIL", flush=True)
 
 print("== ALL DIALOGS SEEN ==")
 for t in DIALOGS: print(" >>", t)

@@ -5,7 +5,7 @@ that loads `~/.pi/agent/extensions` - the CLI TUI, PiChamber, and Orbit. Zero
 frontend modifications: everything rides pi's extension API. Policy is layered:
 `pi-permission-system` ("pps") owns asks and the general policy, the
 `pi-veto` extension owns the deny-only catastrophic floor, and this extension
-owns the mode selection, the plan-file carve-out, and scout-only subagent
+owns the mode selection, the plan-file carve-out, and Explore-only subagent
 dispatch.
 
 ## How a mode works
@@ -47,7 +47,7 @@ depth - a resumed session that smuggles a stale tool set still cannot write):
      outright.
    - plan: `write/edit` are allowed **only** when the target path is under
      `~/.pi/plans/` or `<cwd>/.plans/`; `subagent` is allowed **only** for the
-     read-only `scout` profile. This is what closes the `--continue` resume
+     read-only `Explore` profile. This is what closes the `--continue` resume
      leak (`pps` once resolved such calls agent-null) while still letting a
      planning session write its own plan documents.
 5. **pi-veto** (separate extension, below everything): hard-denies catastrophic
@@ -56,11 +56,19 @@ depth - a resumed session that smuggles a stale tool set still cannot write):
 
 `!`/`!!` user-bash (and the RPC `bash` command) is gated by the `user_bash`
 handler: in plan/ask only a read-only command allowlist passes, with per-command
-flag denies (`find -delete/-exec`, `rg --pre`, `sort -o`, `sed -i`, `tree -o`)
-since a bare name check would let `find . -delete` through; a `cd` segment is
-benign because every other segment of the chain is still judged on its own.
-Unparseable shapes fail closed; build mode passes through to pps. `pi-veto`
-checks the same commands first and blocks its floor in every mode.
+flag denies (`find -delete/-exec/-fprint`, `rg --pre`, `sort -o`, `tree -o`,
+`file -C`, `git --output`) since a bare name check would let `find . -delete`
+through; a `cd` segment is benign because every other segment of the chain is
+still judged on its own. `uniq`, `sed`, and `env` are not on the list at all:
+`uniq IN OUT` writes a file, a sed script can carry `w`/`e`, and `env CMD` is a
+wrapper. `git` is read-only only for the read subcommands, with `branch`, `tag`,
+and `remote` limited to their listing forms. Unparseable shapes, a single `&`,
+and newline-separated units fail closed.
+
+Build mode passes through **without a pps check**: pps registers no `user_bash`
+handler, so a build-mode `!cmd` is covered by pi-veto's floor and nothing else.
+That is deliberate (`!cmd` is typed by the user and runs in their own shell),
+but do not describe it as pps-governed.
 
 **Load order is load-bearing.** Extension handlers run in load order, and a
 blocked `tool_call` stops later handlers. The package lists `pi-veto` first and
@@ -92,25 +100,54 @@ chmod 644 ~/.orbit-pi/subagents-extension/index.js   # then restart Orbit
 Recommended Orbit access mode: **Full-access** so pps is the sole prompter
 (no double prompts).
 
-### Global policy shape (why it looks so permissive)
+### Global policy shape
 
-The global pps config is deliberately thin:
+The global pps config is the fail-closed base; the personas narrow or widen it
+per mode:
 
 ```json
-{ "permission": { "*": "allow", "bash": { "*": "allow" }, "path_write": { ...denies... } } }
+{
+  "permission": {
+    "*": "allow",
+    "bash": { "*": "ask", "...": "hard denies (veto mirrors)" },
+    "external_directory_read": { "*": "allow" },
+    "external_directory_write": { "*": "ask", "/tmp/*": "allow", "~/.cache/*": "allow" },
+    "path_read": { "...": "credential denies" },
+    "path_write": { "...": "credential/policy denies" }
+  },
+  "commandEffects": { "...": "git readers, file, tree, du, df, jq, cut, readlink, lsof" }
+}
 ```
 
-- The **ask catalog lives in the agent files** (`build.md`, `worker.md`,
+- `bash: { "*": "ask" }` is the default for an agent with **no profile**: the
+  built-in `Plan`, or a subagent type with no agent file. Every persona states
+  its own `*` (`allow` for build/general-purpose, `deny` for
+  plan/ask/Explore), and agent entries merge after the global ones, so the
+  packaged personas are unaffected while an unprofiled agent stops running
+  bash silently.
+- The catastrophic deny mirrors (`mkfs`, `fdisk`, `dd of=/dev/*`, `reboot`,
+  ...) live here once instead of once per persona. pi-veto is still the
+  authority and fires first; the mirrors only stop pps from offering a dialog
+  for something the veto will refuse.
+- `external_directory_read: allow` plus `commandEffects` for the everyday
+  readers (`git log/show/diff/...`, `file`, `tree`, `du`, `df`, `jq`, `cut`,
+  `readlink`, `lsof`) is what stops a read outside the project from prompting.
+  `external_directory_write` scopes the rest: silent in the project, silent in
+  `/tmp` and `~/.cache`, ask anywhere else. That gate, not a per-command rule,
+  is what scopes `rm`/`rmdir`/`unlink`/`shred`/`truncate`, so they are absent
+  from the catalogs.
+- The ask catalog lives in the agent files (`build.md` and
   `general-purpose.md`, kept byte-identical by `08-catalog-drift.py`), because
   every ask must be mode-aware and could not live globally without leaking into
   plan/ask.
-- The explicit `"bash": { "*": "allow" }` is what the top-level `"*": "allow"`
-  already meant. pps's permissive-bash detector only inspects this global
-  merge (not per-agent frontmatter), so stating it silences a warning that was
-  structurally unable to be right for this layout. Do not drop it: without it
-  the operator gets that advisory on every session start.
-- `path_write` keeps the credential/policy denies as the last-resort layer
-  below pi-veto.
+- `promptTimeoutMs` (3 min) is the wait for a human before an unanswered prompt
+  becomes a denial; `forwardingTimeoutMs` (4 min) must stay above it so a
+  child's forwarded ask does not expire while the parent dialog is still open.
+  `promptNotifications` rings the terminal when a prompt opens.
+- `path_read`/`path_write` keep the credential denies as the last-resort layer
+  below pi-veto. A persona that grants `path_read: { "*": allow }` must repeat
+  those denies **after** the grant: agent entries merge last, so the grant
+  would otherwise shadow the global denies.
 
 ## Adding a 4th mode (recipe)
 
@@ -126,8 +163,8 @@ The global pps config is deliberately thin:
    follow.
 
 Agents with `mode: primary` + `enabled: false` are personas for the *parent*
-session; they stay out of pi-subagents' delegatable list (scout/worker are the
-delegatable ones and live in the same directory).
+session; they stay out of pi-subagents' delegatable list (`general-purpose` and
+`Explore` are the delegatable ones and live in the same directory).
 
 ## Tests / upgrade gate
 
@@ -141,13 +178,14 @@ Orbit - pps's config format has broken across majors before (see its
 | `01-mode-switch.py` | `/plan` keeps the carve-out tool set; `/build` restores; entries persist |
 | `02-resume-and-gate.py` | resume keeps plan mode; RPC `bash` (`!cmd`) gate blocks `touch`, passes `ls` |
 | `03-resume-leak.py` | resumed plan session cannot write project files (`tool_call` blocker) |
-| `04-dialogs-subagents.py` | fresh session default; pps ask-dialog approve/deny round-trip over RPC; worker forwarded approval (`sh -c`); scout child cannot write |
+| `04-dialogs-subagents.py` | fresh session default; pps ask-dialog approve/deny round-trip over RPC (`chmod`); `general-purpose` forwarded approval (`sh -c`); `Explore` child cannot write |
 | `05-plan-carveout.py` | plan writes are silent-denied outside the plan dirs, allowed inside them, and no `permission_request.waiting` ever appears |
 | `06-mode-transition.py` | switching plan->build injects `<workflow_mode_changed>` and the model acts on the new mode |
 | `07-veto.py` | pi-veto blocks `wipefs` (a command pps does not know) and `dd of=/dev/*` via `!cmd`; floor.json adds denies and ignores non-deny shapes |
-| `08-catalog-drift.py` | `build.md`, `worker.md`, and `general-purpose.md` carry byte-identical catalogs |
+| `08-catalog-drift.py` | `build.md`/`general-purpose.md` catalogs and the plan/ask/Explore read-only surface are byte-identical, with no `uniq`/`sed` leak |
 | `09-load-order.py` | the package lists `pi-veto` first, settings lists the package before pps, and no loose copies shadow it (a block must preempt an ask dialog) |
 | `10-readonly-bash.py` | plan-mode compound `cd && grep` runs on both bash paths, while `find -delete`, `rg --pre`, `sed -n -i`, `$(...)` and `&& touch` leave every probe intact |
+| `11-user-bash-gate.py` | `!cmd`/RPC-bash gate: readers pass; `uniq IN OUT`, `sort -o`, `file -C`, `git tag/branch/remote` mutations, `git --output`, `date -s`, `env`, `sed`, single `&`, and newline units are blocked |
 
 They pin `--model basalt/Qwen3.8-Flash-Next-NVFP4` deliberately: pi's global
 "last used model" drifts with GUI use, and a wrong/empty model makes every

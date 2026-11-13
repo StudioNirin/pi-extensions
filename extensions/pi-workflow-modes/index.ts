@@ -46,32 +46,35 @@ const MODE_SUMMARY: Record<Mode, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// user_bash (!cmd) gating - read-only allowlist for plan/ask. A command-name
-// allowlist plus per-command flag denies (fail-closed): the fine-grained pps
-// patterns cover tool bash calls; this closes the direct `!` execution hole
-// for read-only modes only. build mode deliberately passes through (pps policy
-// is the authority there, and `!cmd` is a user-initiated path).
+// user_bash (!cmd) gating - read-only allowlist for plan/ask. pi-permission-
+// system registers no user_bash handler, so this is the only check on a
+// user-initiated `!cmd`; build mode deliberately passes through (`!cmd` is
+// typed by the user, and pps + pi-veto govern the agent's own bash calls).
+// Fail closed: a command-name allowlist, so any writer not named here is
+// blocked, plus per-command flag denies. `uniq`, `sed`, and `env` are absent
+// on purpose: `uniq IN OUT` writes a file, a sed script can carry `w`/`e`
+// commands no option check can see, and `env CMD` is a wrapper. Caught:
+// exact flags, `--flag=value` attachments, and getopt_long abbreviations.
+// Not caught: exotic short-flag clusters (`sort -bo out`).
 // ---------------------------------------------------------------------------
 
 const READONLY_COMMANDS = new Set([
 	"ls", "cat", "head", "tail", "wc", "rg", "grep", "find", "tree", "file",
-	"stat", "du", "df", "sort", "uniq", "cut", "tr", "diff", "jq", "basename",
+	"stat", "du", "df", "sort", "cut", "tr", "diff", "jq", "basename",
 	"dirname", "realpath", "readlink", "which", "type", "echo", "printf",
-	"pwd", "date", "env", "printenv",
+	"pwd", "date", "printenv",
 ]);
 const READONLY_GIT = new Set([
 	"status", "diff", "log", "show", "ls-files", "ls-tree", "rev-parse",
-	"remote", "branch", "blame", "describe", "tag",
+	"blame", "describe",
+]);
+// Branch/tag listing flags: with one present, a following bare word is a
+// filter, not a name to create. Without one, `git branch foo` creates.
+const GIT_LIST_FLAGS = new Set([
+	"-v", "-vv", "-a", "-r", "-l", "--list", "--all", "--remotes",
+	"--show-current", "--verbose",
 ]);
 
-// Flags that turn an allowlisted reader into a writer or an executor. On the
-// tool-bash path pps screens most of these itself (effect guards for find /
-// sort / sed, wrapper floors for find -exec) and the personas deny what pps
-// cannot see (rg --pre); this gate is the only check on the `!cmd` path, so
-// it screens all of them here. Caught: exact flags, `--flag=value`
-// attachments, and getopt_long abbreviations of long flags. Not caught:
-// exotic short-flag clusters (`sort -bo out`) - keep those out of read-only
-// modes.
 const DENIED_FLAGS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
 	["find", new Set([
 		"-delete", "-exec", "-execdir", "-ok", "-okdir",
@@ -79,8 +82,9 @@ const DENIED_FLAGS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
 	])],
 	["rg", new Set(["--pre", "--hostname-bin"])],
 	["sort", new Set(["-o", "--output"])],
-	["sed", new Set(["-i", "--in-place"])],
 	["tree", new Set(["-o", "--outfile"])],
+	["file", new Set(["-C", "--compile"])],
+	["git", new Set(["--output"])],
 ]);
 
 function hasDeniedFlag(cmd: string, words: readonly string[]): boolean {
@@ -88,7 +92,14 @@ function hasDeniedFlag(cmd: string, words: readonly string[]): boolean {
 	if (denied === undefined) return false;
 	return words.some((word) => {
 		if (denied.has(word)) return true;
-		if (!word.startsWith("--")) return false;
+		if (!word.startsWith("-")) return false;
+		if (!word.startsWith("--")) {
+			// A short flag also counts inside a cluster: `sort -uo out`,
+			// `file -bC`. A long flag cannot hide this way.
+			return [...denied].some(
+				(flag) => flag.length === 2 && word.slice(1).includes(flag.charAt(1)),
+			);
+		}
 		// Compare the option stem: `--flag=value` is one word, and
 		// getopt_long resolves any unambiguous abbreviation, so `--out=`
 		// reaches `--output` just the same.
@@ -103,25 +114,71 @@ function hasDeniedFlag(cmd: string, words: readonly string[]): boolean {
 	});
 }
 
+/**
+ * `date` sets the clock with `-s`/`--set`, and `-s<value>` is one word, so
+ * this checks the leading letter rather than scanning for an `s`: the
+ * single-dash long form `-Iseconds` only formats, and a cluster such as
+ * `date -us` falls under the "no exotic short-flag clusters" caveat above.
+ */
+function dateIsReadOnly(words: readonly string[]): boolean {
+	return !words.some(
+		(word) => word.startsWith("-s") || word === "--set" || word.startsWith("--set="),
+	);
+}
+
+function gitIsReadOnly(words: readonly string[]): boolean {
+	const sub = words[1];
+	if (sub === undefined) return false;
+	// Version and help print and exit; they touch no repository state.
+	if (sub === "--version" || sub === "version" || sub === "--help" || sub === "help") {
+		return true;
+	}
+	// Bare `git stash` pushes, which mutates; only list and show read.
+	if (sub === "stash") return words[2] === "list" || words[2] === "show";
+	if (sub === "branch") {
+		const rest = words.slice(2);
+		if (rest.length === 0) return true;
+		if (!rest.some((word) => GIT_LIST_FLAGS.has(word))) return false;
+		return rest.every((word) => GIT_LIST_FLAGS.has(word) || !word.startsWith("-"));
+	}
+	if (sub === "remote") {
+		const third = words[2];
+		return third === undefined || ["-v", "-vv", "show", "get-url"].includes(third);
+	}
+	if (sub === "tag") {
+		const rest = words.slice(2);
+		if (rest.length === 0) return true;
+		const isList = (word: string): boolean =>
+			word === "-l" || word === "--list" || word === "-n" || /^-n\d+$/.test(word);
+		if (!rest.some(isList)) return false;
+		return rest.every((word) => isList(word) || !word.startsWith("-"));
+	}
+	if (sub === "worktree") return words[2] === "list";
+	return READONLY_GIT.has(sub);
+}
+
 function segmentIsReadOnly(segment: string): boolean {
 	const words = segment.trim().split(/\s+/).filter(Boolean);
 	if (words.length === 0) return true;
-	const [cmd, sub] = words;
+	const cmd = words[0] ?? "";
 	// cd only moves this shell's own directory, and every segment of the
 	// chain is judged separately here (as pps does for tool bash), so
 	// allowing cd cannot smuggle `cd x && rm y` past the rm segment.
 	if (cmd === "cd") return true;
 	if (hasDeniedFlag(cmd, words)) return false;
-	if (cmd === "sed") return sub === "-n";
-	if (cmd === "git") return sub !== undefined && READONLY_GIT.has(sub);
+	if (cmd === "date") return dateIsReadOnly(words);
+	if (cmd === "git") return gitIsReadOnly(words);
 	return READONLY_COMMANDS.has(cmd);
 }
 
 function commandIsReadOnly(command: string): boolean {
 	// Any unparseable shape fails closed.
 	if (/[<>]|\$\(|`|\btee\b/.test(command)) return false;
+	// A single `&` backgrounds a unit the splitter below does not judge; `&&`
+	// is a separator it does split on.
+	if (/(^|[^&])&([^&]|$)/.test(command)) return false;
 	return command
-		.split(/;|&&|\|\||\|/)
+		.split(/\n|;|&&|\|\||\|/)
 		.every((segment) => segmentIsReadOnly(segment));
 }
 
@@ -394,7 +451,7 @@ export default function (pi: ExtensionAPI): void {
 	// (Orbit chip, own entry, default) selected the mode:
 	//   - ask: write/edit and the subagent trio are blocked.
 	//   - plan: write/edit only under ~/.pi/plans or <cwd>/.plans; subagent
-	//     only for the read-only `scout` profile.
+	//     only for the read-only `Explore` profile.
 	pi.on("tool_call", (event, ctx) => {
 		let resolution: Resolution;
 		try {
@@ -426,14 +483,14 @@ export default function (pi: ExtensionAPI): void {
 
 		if (SCOUT_ONLY_SUBAGENT_TOOLS.has(event.toolName)) {
 			const target = (event.input as { subagent_type?: unknown } | undefined)?.subagent_type;
-			if (target === "scout") return undefined;
+			if (target === "Explore") return undefined;
 			return {
 				block: true,
-				reason: `[pi-workflow-modes] Plan mode may only dispatch the read-only 'scout' subagent (requested: ${typeof target === "string" && target.length > 0 ? target : "none"}). Switch to /build for other agents.`,
+				reason: `[pi-workflow-modes] Plan mode may only dispatch the read-only 'Explore' subagent (requested: ${typeof target === "string" && target.length > 0 ? target : "none"}). Switch to /build for other agents.`,
 			};
 		}
 
-		if (SUBAGENT_TOOLS.has(event.toolName)) return undefined; // steer/result of a scout
+		if (SUBAGENT_TOOLS.has(event.toolName)) return undefined; // steer/result of an Explore
 		return undefined;
 	});
 

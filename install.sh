@@ -75,6 +75,14 @@ done
 #    your deployed files are the source of truth for your own policy, so they
 #    are only written when absent unless --force is given.
 mkdir -p "$AGENT_DIR/agents"
+# Retired personas (0.4.1): worker was redundant with general-purpose, scout
+# with Explore. Remove them so they cannot be dispatched by accident.
+for retired in worker.md scout.md; do
+  if [ -e "$AGENT_DIR/agents/$retired" ]; then
+    echo "removing retired persona: $AGENT_DIR/agents/$retired"
+    rm -f "$AGENT_DIR/agents/$retired"
+  fi
+done
 for src in "$REPO_DIR"/agents/*.md; do
   dst="$AGENT_DIR/agents/$(basename "$src")"
   if [ -e "$dst" ] && [ "$FORCE" -eq 0 ]; then

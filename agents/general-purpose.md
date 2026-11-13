@@ -3,23 +3,22 @@ name: general-purpose
 description: General-purpose delegated agent. Same catalog as build so unprofiled multi-step children never fall back to a bare allow.
 mode: subagent
 permission:
-  external_directory_write: ask
+  "*": allow
   mcp: ask
   bash:
     "*": allow
-    # --- asks: mutations with real blast radius (union of the seeded catalog
-    # and the user's OpenChamber table; in-project work stays silent) ---
-    "rm": ask
-    "rm *": ask
-    "rmdir *": ask
-    "unlink *": ask
-    "shred *": ask
-    "truncate *": ask
+    # --- asks: mutations with real blast radius. Path-based deletions and
+    # rewrites are not listed here: the global external_directory_write policy
+    # owns them, so rm/rmdir/shred/truncate run silently in the project and in
+    # /tmp, and ask outside both. These entries cover what a path check cannot
+    # see (recursive search-and-destroy, interpreters, privilege, remotes). ---
     "find * -delete*": ask
     "find * -exec *": ask
     "find * -execdir *": ask
     "xargs *": ask
     "dd *": ask
+    "dd if=*": allow
+    "dd * of=*": ask
     "chmod *": ask
     "chown *": ask
     "chgrp *": ask
@@ -73,26 +72,6 @@ permission:
     "wget * | sh *": ask
     "curl * > *": ask
     "wget * -O *": ask
-    # --- hard denies: mirror of the pi-veto floor, kept here only so pps
-    # refuses silently instead of offering a dialog before the veto fires.
-    # pi-veto is the authority; these are not removable security. ---
-    "mkfs *": deny
-    "mkfs.* *": deny
-    "fdisk *": deny
-    "parted *": deny
-    "wipefs *": deny
-    "mount *": deny
-    "umount *": deny
-    "dd *of=/dev/*": deny
-    "shred /dev/*": deny
-    "rm -rf /": deny
-    "rm -fr /": deny
-    "rm -rf / --no-preserve-root": deny
-    "rm -fr / --no-preserve-root": deny
-    "reboot": deny
-    "shutdown *": deny
-    "poweroff": deny
-    "halt": deny
 ---
 
 You are a general-purpose delegated agent: you may read, write, edit, and run

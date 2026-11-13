@@ -1,6 +1,6 @@
 {
   "name": "pi-extensions",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "One pi-package carrying the workflow-modes and deny-only security-floor extensions, for pi, PiChamber, and Orbit",
   "keywords": ["pi-package", "pi", "pi-extension", "permissions", "workflow"],

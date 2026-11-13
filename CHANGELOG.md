@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.4.1 - 2026-11-13
+
+Policy consolidation after a review of the permission review log (93 asks,
+about a third of them probe traffic) and the pps 42.0.0 merge order.
+
+- Global pps config now carries the fail-closed base instead of relying on a
+  permissive default: `bash: { "*": "ask" }` for any agent with no profile
+  (the built-in `Plan` was falling through to allow), the 14 catastrophic
+  veto mirrors moved down from the three writer personas, and narrow
+  `path_read` denies for credential stores.
+- `external_directory_read: { "*": "allow" }` and
+  `external_directory_write: { "*": "ask", "/tmp/*": "allow",
+  "~/.cache/*": "allow" }`, with `commandEffects` for the everyday readers
+  (`git log/show/diff/...`, `file`, `tree`, `du`, `df`, `jq`, `cut`,
+  `readlink`, `lsof`). This removes the 30 path asks the log showed, almost
+  all of them reads of an unproven command or scratch work in `/tmp`.
+- `rm`/`rmdir`/`unlink`/`shred`/`truncate` are no longer per-command asks in
+  `build.md` or `general-purpose.md`: the write-direction gate already scopes
+  them by location (silent in the project and in `/tmp`, ask outside both).
+  `dd` is scoped the same way (`dd if=*` allowed, `dd * of=*` ask).
+- personas: `worker.md` and `scout.md` deleted (redundant with
+  `general-purpose` and `Explore`); plan mode now dispatches `Explore`.
+  `uniq` and `sed` removed from every read-only allowlist (a positional
+  output and a `w`/`e` script write without any option), the writer-flag
+  denies from the `!cmd` gate mirrored into the personas, and the git
+  listing forms those modes actually need allowlisted (`branch -a/-v/-r/
+  --show-current`, `tag -n`, `remote show`).
+- `!cmd` gate: `env`, `sed`, and `uniq` dropped; `git` limited to its read
+  subcommands with `branch`/`tag`/`remote` constrained to listing forms;
+  `git --output`, `file -C`, `date -s` screened; a single `&` and
+  newline-separated units fail closed. The README no longer claims build-mode
+  `!cmd` is pps-gated (pps registers no `user_bash` handler; pi-veto covers
+  it).
+- Tests: `08` now pins the writer catalog plus the read-only surface and
+  fails on a `uniq`/`sed` leak; `03`/`04` use `Explore`/`general-purpose`;
+  `04` exercises the ask dialog with `chmod` (location-scoped `rm` no longer
+  prompts); new `11-user-bash-gate.py` pins the gate matrix.
+- Prompt timeouts: `promptTimeoutMs` 15 min to 3 min, `forwardingTimeoutMs`
+  10 min to 4 min (prompt wait must stay below the child's forwarded-ask
+  wait), plus `promptNotifications: ["bell", "osc9"]`.
+
 ## 0.4.0 - 2026-11-12
 
 - Read-only bash compounds in plan/ask no longer die on `cd`. The

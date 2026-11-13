@@ -5,7 +5,7 @@ One **pi-package** carrying the extension stack that gives every pi runtime
 
 | Extension | Role |
 | --- | --- |
-| [`pi-workflow-modes`](extensions/pi-workflow-modes/README.md) | Per-session **plan / ask / build** modes: selection, the plan-file carve-out, scout-only subagent dispatch, and model-visible mode transitions. |
+| [`pi-workflow-modes`](extensions/pi-workflow-modes/README.md) | Per-session **plan / ask / build** modes: selection, the plan-file carve-out, Explore-only subagent dispatch, and model-visible mode transitions. |
 | [`pi-veto`](extensions/pi-veto/README.md) | The **deny-only security floor**: catastrophic commands and credential/policy writes can never run, ask, or be allowed, including from `!cmd`. |
 
 Policy is layered, one authority per concern:
@@ -25,8 +25,8 @@ future UI (`pi-policy-console`).
 ```
 extensions/pi-workflow-modes/   mode selection, carve-out blocker, tests/
 extensions/pi-veto/             deny-only floor + floor.schema.json
-agents/                         generic example personas (build, worker,
-                                general-purpose, plan, ask, scout, Explore)
+agents/                         generic example personas (build,
+                                general-purpose, plan, ask, Explore)
 install.sh                      register the package + seed agents/
 ```
 
@@ -59,9 +59,9 @@ adopt unchanged. Two things are meant to be edited in your deployed copy
 (`~/.pi/agent/agents/*.md`):
 
 1. **The ask catalog.** It carries a union of common risky operations (file
-   deletion, privilege escalation, disk tools, git history rewrites, package
-   managers, remote shells). Add your own hosts, paths, and tools. The LAN
-   block is a placeholder:
+   deletion via recursive search, privilege escalation, disk tools, git
+   history rewrites, package managers, remote shells). Add your own hosts,
+   paths, and tools. The LAN block is a placeholder:
 
    ```yaml
    # EXAMPLE: prompt before touching a personal LAN box. Replace the host
@@ -71,13 +71,15 @@ adopt unchanged. Two things are meant to be edited in your deployed copy
    ```
 
    The installed copies are the source of truth; `install.sh` keeps them
-   unless you pass `--force`. Keep `build.md`, `worker.md`, and
-   `general-purpose.md` byte-identical in that block, or
-   `08-catalog-drift.py` fails.
+   unless you pass `--force`. Keep `build.md` and `general-purpose.md`
+   byte-identical in that block, or `08-catalog-drift.py` fails.
 
-2. **Project paths.** `path_write` and `external_directory_write` are yours:
-   keep the credential/policy denies, then add allows for your own data and
-   model directories where external writes should stay silent.
+2. **Project paths.** `path_write`, `external_directory_write`, and the global
+   `bash` default are yours: keep the credential/policy denies, then add
+   allows for your own data and model directories where external writes should
+   stay silent. The global `external_directory_write` gate is what scopes
+   `rm`/`rmdir`/`shred`/`truncate` by location, so there is no per-command
+   deletion ask to maintain.
 
 `pi-veto` needs no personalization. Its `floor.json` is additive:
 

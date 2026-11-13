@@ -64,7 +64,7 @@ if s2.p.poll() is not None:
 prev=s2.agent_ends()
 s2.send({"id":2,"type":"prompt","message":
     'Call the write tool ONCE to write "x" to ./resume-write-probe.md, then call the '
-    'subagent tool ONCE (subagent_type scout, prompt="hi", description="probe"). '
+    'subagent tool ONCE (subagent_type Explore, prompt="hi", description="probe"). '
     'Report the EXACT text each call returned.'})
 print("probe turn:", s2.wait_end(prev))
 for l in s2.lines:
