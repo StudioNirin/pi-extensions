@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Headless regression suite for pi workflow modes + pps + pi-veto enforcement.
-# Run AFTER any pi / pps / pi-subagents / pichamber / orbit update.
+# Run AFTER any pi / pps / pi-subagents / pichamber update.
 # (No pi-codemode re-pin since PiChamber 1.0.6: it bundles pi-coding-agent 1.5.0,
 #  which pins pi-codemode 1.5.0 exactly.)
 # Each scenario spawns its own `pi --mode rpc` in a real cwd; expect several

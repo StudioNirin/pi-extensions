@@ -1,7 +1,7 @@
 # pi-extensions
 
 One **pi-package** carrying the extension stack that gives every pi runtime
-(the CLI TUI, PiChamber, Orbit) the same policy behaviour:
+(the CLI TUI and PiChamber) the same policy behaviour:
 
 | Extension | Role |
 | --- | --- |
@@ -109,8 +109,8 @@ registering a tool, which would hit the deny-by-default personas.
 
 ## Regression gate
 
-Run after **any** bump of pi, pi-permission-system, pi-subagents, PiChamber, or
-Orbit:
+Run after **any** bump of pi, pi-permission-system, pi-subagents, or
+PiChamber:
 
 ```sh
 extensions/pi-workflow-modes/tests/run.sh

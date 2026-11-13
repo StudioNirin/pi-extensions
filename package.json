@@ -2,7 +2,7 @@
   "name": "pi-extensions",
   "version": "0.4.2",
   "private": true,
-  "description": "One pi-package carrying the workflow-modes and deny-only security-floor extensions, for pi, PiChamber, and Orbit",
+  "description": "One pi-package carrying the workflow-modes and deny-only security-floor extensions, for pi and PiChamber",
   "keywords": ["pi-package", "pi", "pi-extension", "permissions", "workflow"],
   "license": "MIT",
   "peerDependencies": {
