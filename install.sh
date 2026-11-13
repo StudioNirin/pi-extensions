@@ -99,7 +99,7 @@ Next:
   1. Personalize the ask catalog in ~/.pi/agent/agents/*.md (see "Personalize"
      in this repo's README); the deployed files are yours, this repo only
      seeds them.
-  2. `pi` / PiChamber (restart its session daemon) / Orbit (restart)
+  2. `pi` / PiChamber (restart its session daemon)
   3. /workflow-mode should report the active mode
   4. run the regression gate: extensions/pi-workflow-modes/tests/run.sh
 EOF

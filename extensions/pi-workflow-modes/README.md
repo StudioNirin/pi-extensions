@@ -1,7 +1,7 @@
 # pi-workflow-modes
 
 Per-session **workflow modes** (`plan` / `ask` / `build`) for every pi runtime
-that loads `~/.pi/agent/extensions` - the CLI TUI, PiChamber, and Orbit. Zero
+that loads `~/.pi/agent/extensions` - the CLI TUI and PiChamber. Zero
 frontend modifications: everything rides pi's extension API. Policy is layered:
 `pi-permission-system` ("pps") owns asks and the general policy, the
 `pi-veto` extension owns the deny-only catastrophic floor, and this extension
@@ -78,28 +78,6 @@ catalog's deny mirrors would suppress most of those dialogs anyway; the order
 makes it true for every veto-covered command, including the ones the mirrors
 cannot express without matching legitimate paths.
 
-### Orbit interop (single authority)
-
-Sessions created by Orbit carry `orbit:workflow` chip entries. Rule: if the
-newest `orbit:workflow` entry is **newer** than our newest `active_agent`
-entry, Orbit's chip is the authority - we *mirror* it into an `active_agent`
-entry (so pps profiles and dialogs follow you) but never inject our own prompt
-(Orbit supplies mode guidance and tool scoping itself). Typing `/plan` etc.
-flips authority back to you (your entry becomes newest). Orbit sessions are
-also detected via `ORBIT_BUNDLED_EXTENSIONS` / `ORBIT_WORKFLOW_MODE` env.
-
-Orbit's own bundled subagent extension is disabled by
-`chmod 000 ~/.orbit-pi/subagents-extension/index.js` so the same-author
-`@gotgenes/pi-subagents` package can register the `subagent` tool (pi treats
-duplicate tool names as a fatal conflict in either order). Restore with:
-
-```sh
-chmod 644 ~/.orbit-pi/subagents-extension/index.js   # then restart Orbit
-```
-
-Recommended Orbit access mode: **Full-access** so pps is the sole prompter
-(no double prompts).
-
 ### Global policy shape
 
 The global pps config is the fail-closed base; the personas narrow or widen it
@@ -169,8 +147,8 @@ session; they stay out of pi-subagents' delegatable list (`general-purpose` and
 ## Tests / upgrade gate
 
 `tests/` holds a headless RPC regression suite (scenario scripts + `run.sh`).
-Run after **any** version change to pi, pps, pi-subagents, PiChamber, or
-Orbit - pps's config format has broken across majors before (see its
+Run after **any** version change to pi, pps, pi-subagents, or PiChamber -
+pps's config format has broken across majors before (see its
 `docs/migration/legacy-to-flat.md`). Scenario map:
 
 | Script | Proves |

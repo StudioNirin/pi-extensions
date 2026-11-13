@@ -13,13 +13,9 @@
  * body; pps reads the `permission:` frontmatter of those same files).
  *
  * Authority rule (single authority per session):
- *   - If the session's newest `orbit:workflow` entry is newer than our newest
- *     `active_agent` entry, Orbit's chip is the authority: we mirror its mode
- *     into an `active_agent` entry for pps but never inject our own prompt
- *     (Orbit supplies mode guidance and tool scoping itself).
- *   - Otherwise this extension is the authority: `/plan` `/ask` `/build`
- *     append the entry, and `before_agent_start` injects that mode's agent
- *     body plus the `<active_agent>` tag (mirroring pi-subagents' vocabulary).
+ *   - This extension is the authority: `/plan` `/ask` `/build` append the
+ *     entry, and `before_agent_start` injects that mode's agent body plus the
+ *     `<active_agent>` tag (mirroring pi-subagents' vocabulary).
  *   - No signals at all => `build` (fail toward the managed mode; pps global
  *     policy still applies underneath everything).
  */
@@ -36,7 +32,6 @@ const MODES = ["plan", "ask", "build"] as const;
 type Mode = (typeof MODES)[number];
 
 const ACTIVE_AGENT_ENTRY = "active_agent";
-const ORBIT_WORKFLOW_ENTRY = "orbit:workflow";
 const STATUS_KEY = "pi-workflow-modes";
 
 const MODE_SUMMARY: Record<Mode, string> = {
@@ -312,45 +307,27 @@ function normalizeName(value: unknown): Mode | null {
 	return MODES.includes(value as Mode) ? (value as Mode) : null;
 }
 
-/** True when this pi process was spawned by Orbit (it exports its bundle env on every session spawn). */
-function isOrbitSession(): boolean {
-	return Boolean(process.env.ORBIT_BUNDLED_EXTENSIONS || process.env.ORBIT_WORKFLOW_MODE);
-}
-
 const ACTIVE_AGENT_TAG_RE = /<active_agent\s+name=["'][^"']+["']/i;
 
 type Resolution = {
 	mode: Mode;
-	authority: "own" | "orbit" | "default";
+	authority: "own" | "default";
 };
 
 function resolveMode(ctx: ExtensionContext): Resolution {
 	const own = newestEntry(ctx, ACTIVE_AGENT_ENTRY);
 	const ownName = own.index >= 0 ? normalizeName(own.data?.name) : undefined;
-	const orbit = newestEntry(ctx, ORBIT_WORKFLOW_ENTRY);
-	const orbitName = orbit.index >= 0 ? normalizeName(orbit.data?.mode) : null;
-
-	if (orbit.index >= 0 && orbit.index > own.index && orbitName) {
-		return { mode: orbitName, authority: "orbit" };
-	}
 	if (own.index >= 0) {
 		// An explicit clear ({name: null}) falls back to the build default.
 		return { mode: ownName ?? "build", authority: "own" };
-	}
-	if (isOrbitSession()) {
-		// Orbit sessions are chip-governed even before any entry exists:
-		// mirror the env-seeded mode and let Orbit own guidance/tools.
-		const envMode = normalizeName(process.env.ORBIT_WORKFLOW_MODE);
-		return { mode: orbitName ?? envMode ?? "build", authority: "orbit" };
 	}
 	return { mode: "build", authority: "default" };
 }
 
 function updateStatus(ctx: ExtensionContext, resolution: Resolution): void {
-	const suffix = resolution.authority === "orbit" ? " (Orbit chip)" : "";
 	ctx.ui?.setStatus?.(
 		STATUS_KEY,
-		`mode: ${resolution.mode}${suffix} · ${MODE_SUMMARY[resolution.mode]}`,
+		`mode: ${resolution.mode} · ${MODE_SUMMARY[resolution.mode]}`,
 	);
 }
 
@@ -400,17 +377,6 @@ export default function (pi: ExtensionAPI): void {
 		const resolution = resolveMode(ctx);
 		updateStatus(ctx, resolution);
 
-		if (resolution.authority === "orbit") {
-			// Mirror into pps vocabulary, but let Orbit keep supplying its own
-			// guidance and tool scoping - never double authority.
-			const own = newestEntry(ctx, ACTIVE_AGENT_ENTRY);
-			const ownName = own.index >= 0 ? normalizeName(own.data?.name) : undefined;
-			if (ownName !== resolution.mode) {
-				pi.appendEntry(ACTIVE_AGENT_ENTRY, { name: resolution.mode });
-			}
-			return undefined;
-		}
-
 		// Belt and braces below pps for ask mode. Plan mode keeps write/edit
 		// active and relies on the path check in the tool_call blocker, so the
 		// plan-file carve-out cannot reopen the resumed-session write leak.
@@ -448,7 +414,7 @@ export default function (pi: ExtensionAPI): void {
 	// resume) can dispatch tools whose active-set/prompt state says removed
 	// while pps resolves them without the agent profile. The mode layer
 	// enforces the read-only posture outright, regardless of which system
-	// (Orbit chip, own entry, default) selected the mode:
+	// (own entry, default) selected the mode:
 	//   - ask: write/edit and the subagent trio are blocked.
 	//   - plan: write/edit only under ~/.pi/plans or <cwd>/.plans; subagent
 	//     only for the read-only `Explore` profile.
