@@ -17,15 +17,20 @@ PiChamber (whose bridge renders function components through a tuiStub) it does
 draw; that half is a manual look.
 
 Pass criteria in printed output:
-  - P1 both meters installed floating (no @version pin) in settings.json
+  - P1 each meter installed floating from its expected source (pi-token-speed
+    must be the StudioNirin fork, not the npm build; see P3)
   - P2 neither registers a tool, and no loose copy shadows them
   - M1 the setStatus meter produced at least 5 samples during a streamed turn
   - M2 its peak redraw rate stayed at or under 15 updates in any one second
-  - M3 its number did not jump more than 45% of its own observed range
+  - M3 its mid-stream number did not jump more than 45% of the observed range
+    (the end-of-turn frame is excluded: it legitimately carries the reconciled
+    average, and M5 judges it instead)
   - M4 the rate part of its line, everything up to "tok/s", took at most 8
     distinct widths. With the meter configured display=full the whole line
     legitimately changes length as token and elapsed digits change, so the total
     is printed without a verdict
+  - M5 the final frame's token count equals the session file's usage.output
+    total: the end-to-end gate for the fork's forced end-of-turn render
   - N1 pi-token-rate loaded without an extension error and drew nothing over RPC
 """
 import json, os, re, subprocess, sys, threading, time
@@ -40,6 +45,17 @@ MODEL = ["--model", TEST_MODEL]
 STATUS_KEY = "tokenSpeed"          # pi-token-speed: src/config/constants.ts
 WIDGET_KEY = "token-rate-spark"    # pi-token-rate: index.ts
 METERS = ("pi-token-speed", "pi-token-rate")
+# pi-token-speed is a fork: the npm build drops the reconciled end-of-turn
+# frame so the footer shows a stale count (gsanhueza/pi-token-speed#20). The
+# meter must come from the fork and float on its default branch, never pin.
+SOURCE_SPEC = {
+    "pi-token-speed": "git:github.com/StudioNirin/pi-token-speed",
+    "pi-token-rate": "npm:pi-token-rate",
+}
+INSTALL_ROOT = {
+    "pi-token-speed": os.path.join(AGENT_DIR, "git", "github.com", "StudioNirin", "pi-token-speed"),
+    "pi-token-rate": os.path.join(NPM_DIR, "pi-token-rate"),
+}
 MAX_UPDATES_PER_SEC = 15
 MAX_JITTER_FRACTION = 0.45
 MAX_DISTINCT_WIDTHS = 8
@@ -57,15 +73,16 @@ def info(label, detail=""):
 # --- P1 floating install policy -------------------------------------------------
 settings = json.load(open(SETTINGS, encoding="utf-8"))
 packages = [e if isinstance(e, str) else e.get("source", "") for e in settings.get("packages", [])]
-floating = {m: [e for e in packages if e.endswith(m) or f"npm:{m}@" in e or e.endswith(f"{m}@")] for m in METERS}
 for meter in METERS:
-    entries = floating[meter]
-    unpinned = [e for e in entries if "@" not in e.split("/")[-1].replace("npm:", "")]
-    check(f"P1 {meter} installed floating", bool(entries) and bool(unpinned), f"entries={entries}")
+    spec = SOURCE_SPEC[meter]
+    entries = [e for e in packages if e == spec or e.startswith(spec + "@")]
+    floating_only = [e for e in entries if e == spec]
+    check(f"P1 {meter} installed floating from {spec}", bool(entries) and bool(floating_only),
+          f"entries={entries}")
 
 # --- P2 no tool surface, no shadowing ------------------------------------------
 for meter in METERS:
-    root = os.path.join(NPM_DIR, meter)
+    root = INSTALL_ROOT[meter]
     registers = False
     if os.path.isdir(root):
         for dirpath, _, files in os.walk(root):
@@ -83,6 +100,19 @@ for meter in METERS:
           "installed" if os.path.isdir(root) else "MISSING")
 loose = [os.path.join(AGENT_DIR, "extensions", m) for m in METERS if os.path.exists(os.path.join(AGENT_DIR, "extensions", m))]
 check("P2 no loose meter dirs", not loose, f"found={loose}")
+
+# --- P3 installed meter carries the end-of-turn render fix ----------------------
+# The whole reason pi-token-speed is a fork. handleAgentEnd must render with the
+# throttle bypassed, or the reconciled final frame is dropped and the footer
+# understates the turn (gsanhueza/pi-token-speed#20). If pi is ever repointed at
+# the npm build, or the fork branch loses the commit, this catches it.
+events_src = os.path.join(INSTALL_ROOT["pi-token-speed"], "src", "core", "events.ts")
+try:
+    events_text = open(events_src, encoding="utf-8").read()
+except OSError:
+    events_text = ""
+check("P3 installed meter forces the end-of-turn render",
+      "renderer.update(ctx, true)" in events_text, events_src)
 
 # --- M1..M4 observe one streamed turn -----------------------------------------
 class Session:
@@ -131,6 +161,14 @@ class Session:
     def stop(self):
         self.p.terminate()
 
+# The session file for this run, to hold the meter to the provider's own count.
+# Bucket directory naming: cwd with "/" replaced by "-", wrapped in double dashes.
+SESSION_BUCKET = os.path.join(AGENT_DIR, "sessions", "--" + CWD.strip("/").replace("/", "-") + "--")
+try:
+    SESSIONS_BEFORE = set(os.listdir(SESSION_BUCKET))
+except OSError:
+    SESSIONS_BEFORE = set()
+
 s = Session()
 s.send({"id": 1, "type": "get_state"})
 time.sleep(6)
@@ -173,16 +211,21 @@ else:
     check("M2 redraw throttled", False, "too few samples to measure")
 
 RATE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*tok/s")
+COUNT_RE = re.compile(r"(\d+) tok in")
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
 rates = [(t, float(RATE_RE.search(v).group(1)), v) for t, v in samples if RATE_RE.search(v)]
-if len(rates) > WARMUP_SAMPLES:
-    warm = rates[WARMUP_SAMPLES:]
+if len(rates) > WARMUP_SAMPLES + 1:
+    # Last frame excluded on purpose: it is the end-of-turn render, where
+    # reconcileTotal snaps the total to provider usage and endTpsBehavior
+    # "average" legitimately differs from the sliding-window mid-stream value.
+    # M3 judges mid-stream smoothness; M5 judges that final frame's accuracy.
+    warm = rates[WARMUP_SAMPLES:-1]
     deltas = [abs(b[1] - a[1]) for a, b in zip(warm, warm[1:])]
     span_range = max(r[1] for r in warm) - min(r[1] for r in warm)
     worst = max(deltas) if deltas else 0.0
     limit = MAX_JITTER_FRACTION * max(span_range, 1.0)
     check("M3 readout did not swing", worst <= limit,
           f"max jump={worst:.1f} tok/s limit={limit:.1f} range={span_range:.1f} min={min(r[1] for r in warm):.1f} max={max(r[1] for r in warm):.1f}")
-    ANSI = re.compile(r"\x1b\[[0-9;]*m")
     def segment(value):
         # The part of the line whose length should not move as a side effect of
         # the number itself: everything up to and including "tok/s".
@@ -200,6 +243,38 @@ if len(rates) > WARMUP_SAMPLES:
 else:
     check("M3 readout did not swing", False, f"parsable tok/s samples={len(rates)}")
     check("M4 rendered width steady", False, "no parsable samples")
+
+# --- M5 the final frame carries the reconciled turn total ------------------------
+# The fork's reason to exist (gsanhueza/pi-token-speed#20). Without the forced
+# end-of-turn render this comparison reads a mid-stream snapshot: measured
+# 703/890 and 474/629 on the npm build at the shipped 80 ms interval, versus
+# exact matches with the throttle off. Now that the fork publishes the frame,
+# the last token count shown must equal the session file's usage.output sum.
+final_tok = None
+for _, v in reversed(samples):
+    m = COUNT_RE.search(ANSI.sub("", v))
+    if m:
+        final_tok = int(m.group(1))
+        break
+auth_total = None
+try:
+    new_sessions = [f for f in sorted(os.listdir(SESSION_BUCKET)) if f not in SESSIONS_BEFORE]
+except OSError:
+    new_sessions = []
+if new_sessions:
+    auth_total = 0
+    with open(os.path.join(SESSION_BUCKET, new_sessions[-1]), encoding="utf-8", errors="replace") as f:
+        for line in f:
+            try:
+                d = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            msg = d.get("message") or d
+            if msg.get("role") == "assistant" and isinstance((msg.get("usage") or {}).get("output"), (int, float)):
+                auth_total += msg["usage"]["output"]
+check("M5 final frame matches usage.output",
+      final_tok is not None and auth_total is not None and final_tok == auth_total,
+      f"final={final_tok} usage_output={auth_total}")
 
 # --- N1 pi-token-rate loads clean and stays invisible over RPC -----------------
 errors = re.findall(r"(?i)(pi-token-rate|token-rate-spark)[^\n]{0,120}(error|failed|throw)", stderr_text)

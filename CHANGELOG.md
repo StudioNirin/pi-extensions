@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.4 - 2026-11-13
+
+**Breaking for the project-local plan directory.** `<cwd>/.plans/` is renamed to
+`<cwd>/.pi/plans/`, with no alias: plan mode denies the old name from this
+version on.
+
+- Two reasons, both cosmetic in isolation and worth it together. The pair
+  `~/.pi/plans/` and `<cwd>/.plans/` put one plan store inside pi's config
+  directory and the other at the project root; `<cwd>/.pi/` is pi's own
+  project-scoped location, the one pps already treats as pi infrastructure for
+  `<cwd>/.pi/npm` and `<cwd>/.pi/git`. And a plan document at the project root
+  added a second ignore entry next to `.pi/` in every project using plan mode,
+  which is exactly the untracked noise report that prompted the change.
+- pi core was not a factor: no plans directory appears anywhere in
+  `/opt/pi-coding-agent/docs`, and the bundled `examples/extensions/plan-mode/`
+  example never writes a plan file at all. Both names were this stack's, so the
+  move settles an inconsistency between them rather than diverging from pi.
+- `planPathAllowed()` now returns `~/.pi/plans` and `<cwd>/.pi/plans`; the
+  `plan.md` persona allows `.pi/plans/*` in `path_write` and
+  `external_directory_write`; scenario 05 probes the new paths; the README
+  section gained the `test -d` finding, that an unclassifiable command's path
+  token consults both surfaces, so plan mode cannot even stat a directory it may
+  not write.
+- Nothing to migrate: no `.plans` directory held any file on this box, and the
+  empty one under `AI-APPS` was a harness leftover and is gone.
+- The footer meter is no longer the npm `pi-token-speed`: its npm build drops
+  the reconciled end-of-turn render, so the footer understated nearly every
+  turn (measured 703 vs 890 at the shipped 80 ms interval). `settings.json`
+  now installs `git:github.com/StudioNirin/pi-token-speed` floating, a fork
+  carrying the one-line forced-render fix plus regression tests; the clone is
+  `LLM-Tools/pi-token-speed` with an `upstream` remote for merging his future
+  work. The bug and the patch are filed upstream (issue #20; that repo has pull
+  requests disabled, so the fix is posted there as a patch). Scenario 14's P1
+  now pins the source to the fork and a new P3 fails if the installed meter
+  ever loses the fix.
+
 ## 0.4.3 - 2026-11-13
 
 - `pi-workflow-modes` no longer carries Orbit mode-authority interop: the

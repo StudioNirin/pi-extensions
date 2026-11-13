@@ -46,7 +46,7 @@ depth - a resumed session that smuggles a stale tool set still cannot write):
    - ask: `write/edit/subagent/steer_subagent/get_subagent_result` are blocked
      outright.
    - plan: `write/edit` are allowed **only** when the target path is under
-     `~/.pi/plans/` or `<cwd>/.plans/`; `subagent` is allowed **only** for the
+     `~/.pi/plans/` or `<cwd>/.pi/plans/`; `subagent` is allowed **only** for the
      read-only `Explore` profile. This is what closes the `--continue` resume
      leak (`pps` once resolved such calls agent-null) while still letting a
      planning session write its own plan documents.
@@ -81,17 +81,22 @@ cannot express without matching legitimate paths.
 ### Authoring plan documents in plan mode
 
 Plan mode exists to write plan documents, so the carve-out is the one thing in
-the read-only posture that must not surprise you. Verified by scenario 05:
+the read-only posture that must not surprise you. Two directories, both chosen
+by this stack: `~/.pi/plans/` for plans that outlive a project, and
+`<cwd>/.pi/plans/` for plans that belong to one. The project-side name follows
+pi's own project-scoped convention, the one pps already recognises for
+`<cwd>/.pi/npm` and `<cwd>/.pi/git`; pi core has no plans directory of its own.
+Verified by scenario 05:
 
-- **Use `write`.** Any path under `<cwd>/.plans/` or `~/.pi/plans/` is allowed,
+- **Use `write`.** Any path under `<cwd>/.pi/plans/` or `~/.pi/plans/` is allowed,
   at any depth, and `write` creates the directories it needs on the way.
-- **`mkdir -p <cwd>/.plans` is denied, and always will be.** `.plans/*` compiles
-  to `^\.plans/.*$`, which needs the separator, so no rule can match the bare
-  directory that `mkdir` names; `"*": deny` wins. This is the denial that reads
-  like "the carve-out is broken". It is not: drop the `mkdir` and the same write
-  succeeds.
+- **`mkdir -p <cwd>/.pi/plans` is denied, and always will be.** `.pi/plans/*`
+  compiles to `^\.pi/plans/.*$`, which needs the separator, so no rule can match
+  the bare directory that `mkdir` names; `"*": deny` wins. This is the denial
+  that reads like "the carve-out is broken". It is not: drop the `mkdir` and the
+  same write succeeds.
 - A bash **output redirect** consults the `path_write` surface, so
-  `cat > <cwd>/.plans/x.md` works and `cat > <cwd>/x.md` is denied. It is pps's
+  `cat > <cwd>/.pi/plans/x.md` works and `cat > <cwd>/x.md` is denied. It is pps's
   rule though, not this extension's: the `tool_call` blocker only inspects
   `write`/`edit` paths, so the redirect stays inside the carve-out exactly as
   long as `path_write` says it does.
@@ -99,14 +104,18 @@ the read-only posture that must not surprise you. Verified by scenario 05:
   classify reports a **path** denial naming the directory; a bare relative
   filename is not a path candidate at all (only absolute, `~/`, `..`-bearing,
   separator-bearing tokens and redirect targets are extracted), so that one
-  reports the **command** rule instead.
-- `<cwd>/.plans` means **this session's** cwd. pps derives a project-relative
+  reports the **command** rule instead. An unclassifiable command's path token
+  consults *both* surfaces, so in plan mode even `test -d <plan dir>` is refused:
+  it may not write there, so it may not stat there either.
+- `<cwd>/.pi/plans` means **this session's** cwd. pps derives a project-relative
   alias for an absolute path only when the path lies strictly inside the session
-  cwd (`access-intent/path-normalization.ts:97`), so a `.plans` directory
-  belonging to another project has nothing to match the persona's relative rule
-  and is denied. `~/.pi/plans/` is absolute and works from anywhere, which is
-  why it looks like the only one that works when a session is opened in the
-  wrong place.
+  cwd (`access-intent/path-normalization.ts:97`), so another project's
+  `.pi/plans` has nothing to match the persona's relative rule and is denied.
+  `~/.pi/plans/` is absolute and works from anywhere, which is why it looks like
+  the only one that works when a session is opened in the wrong place.
+- Both live under a dot-directory projects usually ignore, so plan documents do
+  not turn up as untracked noise: `~/.pi` needs no entry, and adding `.pi/` to a
+  project's `.gitignore` covers the project-side one.
 
 ### Global policy shape
 

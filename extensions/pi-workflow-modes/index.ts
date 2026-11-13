@@ -197,7 +197,7 @@ function agentDir(): string {
 function planDirs(cwd: string): string[] {
 	return [
 		join(homedir(), ".pi", "plans"),
-		join(cwd, ".plans"),
+		join(cwd, ".pi", "plans"),
 	];
 }
 
@@ -416,7 +416,7 @@ export default function (pi: ExtensionAPI): void {
 	// enforces the read-only posture outright, regardless of which system
 	// (own entry, default) selected the mode:
 	//   - ask: write/edit and the subagent trio are blocked.
-	//   - plan: write/edit only under ~/.pi/plans or <cwd>/.plans; subagent
+	//   - plan: write/edit only under ~/.pi/plans or <cwd>/.pi/plans; subagent
 	//     only for the read-only `Explore` profile.
 	pi.on("tool_call", (event, ctx) => {
 		let resolution: Resolution;
@@ -443,7 +443,7 @@ export default function (pi: ExtensionAPI): void {
 			if (planPathAllowed(path, cwd)) return undefined;
 			return {
 				block: true,
-				reason: `[pi-workflow-modes] Plan mode may only write plan documents under ~/.pi/plans/ or <cwd>/.plans/ (attempted: ${path}). Switch to /build to edit project files.`,
+				reason: `[pi-workflow-modes] Plan mode may only write plan documents under ~/.pi/plans/ or <cwd>/.pi/plans/ (attempted: ${path}). Switch to /build to edit project files.`,
 			};
 		}
 

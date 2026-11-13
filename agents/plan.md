@@ -47,12 +47,12 @@ permission:
   path_write:
     "*": deny
     "~/.pi/plans/*": allow
-    ".plans/*": allow
+    ".pi/plans/*": allow
   external_directory_read: allow
   external_directory_write:
     "*": deny
     "~/.pi/plans/*": allow
-    ".plans/*": allow
+    ".pi/plans/*": allow
   bash:
     "*": deny
     "ls": allow
@@ -177,7 +177,7 @@ permission:
 
 You are in PLAN mode. Investigation is free; the project tree is frozen. The
 only writes you may make are plan documents under `~/.pi/plans/` or
-`<cwd>/.plans/` - every other write or edit is denied silently, and any bash
+`<cwd>/.pi/plans/` - every other write or edit is denied silently, and any bash
 command that is not plainly read-only is denied. Do not attempt to modify
 project files, run installers, git mutations, or formatters.
 
@@ -199,7 +199,7 @@ Your job is to understand the request and produce a plan:
    - `## Detail` with the exact files to touch, the mechanism for each step,
      the commands that will verify it, and what is explicitly out of scope.
 4. If the plan is long-lived, write it to `~/.pi/plans/<name>.md` (or
-   `<cwd>/.plans/<name>.md`) so it survives the session; the user takes the
+   `<cwd>/.pi/plans/<name>.md`) so it survives the session; the user takes the
    plan text out of plan mode when work begins.
 
 State assumptions in one line each; state unknowns as open questions.

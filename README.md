@@ -93,13 +93,21 @@ Not in this repo: the footer tok/s readout is two floating packages, listed in
 `settings.json` without a version so `pi update --extensions` picks up their
 fixes:
 
-- `npm:pi-token-speed` writes one `setStatus` footer segment. Configured by the
+- `git:github.com/StudioNirin/pi-token-speed` writes one `setStatus` footer
+  segment. This is a fork of `gsanhueza/pi-token-speed`, not the npm build: the
+  npm version drops the reconciled end-of-turn render when a delta redrew within
+  `updateInterval`, so the footer showed 703 tok against a real 890 (upstream
+  issue #20, patch posted there; PRs are disabled on that repo). The fork clone
+  lives at `LLM-Tools/pi-token-speed` with `upstream` pointing at the original;
+  merge upstream into `master` there and push, and pi's git reconciliation picks
+  it up on the next start since the spec floats. Configured by the
   `tokenSpeed` block in `~/.pi/agent/settings.json`: `updateInterval: 80`
   (it ships `0`, which redraws on every delta), `slidingWindow: 5000` with a
   wider `providerOverrides.basalt` window, `endTpsBehavior: "average"`, and
   `display: "full"` for the `(150 tok in 6.0s · TTFT: 450 ms)` suffix. The four
   modes are `tps`, `ttft`, `stats` and `full`, and they only change the suffix:
-  the primary value is always the rate.
+  the primary value is always the rate. Scenario 14 gates that the installed
+  meter is still the fork carrying the fix.
 - `npm:pi-token-rate` draws a sparkline widget with EMA smoothing, median,
   percentile, peak and cost, and folds in pi-subagents child usage. It has no
   settings key; use `/token-rate` for on/off, position, detail and window.
