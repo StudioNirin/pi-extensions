@@ -16,3 +16,5 @@
 #                         09 load order (veto before pps; no loose copies)
 #                         10 read-only bash (cd compounds allowed; -delete/
 #                            --pre/-i style flags denied on both bash paths)
+# 11 plan-mode !cmd gate   14 throughput meters (installed floating, no tools,
+#                            redraw rate <= 15/s, number jitter, rendered width)

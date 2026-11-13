@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.2 - 2026-11-13
+
+- The footer tok/s readout is no longer vendored code: it is two floating
+  packages (`npm:pi-token-speed`, `npm:pi-token-rate`), listed without a
+  version so `pi update --extensions` picks up their fixes. No file in this
+  repo now depends on unlicensed upstream code. A hand-rolled meter redrew on
+  every delta, reported a raw instantaneous rate, used variable-width numbers,
+  and blanked the readout for the whole of any tool run because the next
+  `message_start` reset it; all four are handled upstream instead.
+- New scenario `14-tps-meters`: both meters are installed floating, neither
+  registers a tool, the `setStatus` meter redraws at most 15 times in any one
+  second, its number does not jump more than 45% of its own observed range, and
+  its rendered width stays inside 8 distinct lengths. The widget meter is
+  checked as load-clean-and-silent, because RPC mode ignores component
+  factories.
+
 ## 0.4.1 - 2026-11-13
 
 Policy consolidation after a review of the permission review log (93 asks,

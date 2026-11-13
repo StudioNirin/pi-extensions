@@ -87,6 +87,26 @@ adopt unchanged. Two things are meant to be edited in your deployed copy
 { "deny": { "bash": ["docker system prune *"], "paths": ["~/work/clients/*"] } }
 ```
 
+## Throughput meters
+
+Not in this repo: the footer tok/s readout is two floating packages, listed in
+`settings.json` without a version so `pi update --extensions` picks up their
+fixes:
+
+- `npm:pi-token-speed` writes one `setStatus` footer segment. Configured by the
+  `tokenSpeed` block in `~/.pi/agent/settings.json`: `updateInterval: 80`
+  (it ships `0`, which redraws on every delta), `slidingWindow: 5000` with a
+  wider `providerOverrides.basalt` window, `endTpsBehavior: "average"`.
+- `npm:pi-token-rate` draws a sparkline widget with EMA smoothing, median,
+  percentile, peak and cost, and folds in pi-subagents child usage. It has no
+  settings key; use `/token-rate` for on/off, position, detail and window.
+
+`pi-token-rate` renders through a component factory, which RPC mode ignores
+(`rpc-extension-ui.md`: only string arrays are supported), so it draws in the
+CLI TUI and in PiChamber and stays silent to a bare RPC client. Scenario 14
+measures the meter that RPC *can* see, and fails if either one starts
+registering a tool, which would hit the deny-by-default personas.
+
 ## Regression gate
 
 Run after **any** bump of pi, pi-permission-system, pi-subagents, PiChamber, or
@@ -96,9 +116,10 @@ Orbit:
 extensions/pi-workflow-modes/tests/run.sh
 ```
 
-Scenarios 01-10 cover mode switching, resume leaks, the `!cmd` gate, dialog
+Scenarios 01-11 cover mode switching, resume leaks, the `!cmd` gate, dialog
 round-trips, plan-file carve-out, mode transitions, the veto floor, catalog
-drift, load order, and the read-only bash shapes (compound `cd && grep`
-allowed, writer/executor flags denied). They pin a model deliberately; set
+drift, load order, the read-only bash shapes (compound `cd && grep` allowed,
+writer/executor flags denied), and the user `!cmd` gate in plan mode. Scenario
+14 measures the throughput meters. They pin a model deliberately; set
 `PI_TEST_CWD` to a scratch project if you do not want probe files in `$PWD`.
 See `tests/README.md`.
