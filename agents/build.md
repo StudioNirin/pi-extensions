@@ -6,6 +6,8 @@ enabled: false
 permission:
   "*": allow
   mcp: ask
+  ask_user_question: allow
+  mockup_choice: allow
   bash:
     "*": allow
     # --- asks: mutations with real blast radius. Path-based deletions and

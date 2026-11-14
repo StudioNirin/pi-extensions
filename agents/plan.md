@@ -13,6 +13,8 @@ permission:
   list: allow
   webfetch: allow
   todowrite: allow
+  ask_user_question: allow
+  mockup_choice: allow
   # Plan-file carve-out: write/edit stay available so plan documents can be
   # authored, but every path outside the two plan directories is denied.
   write: allow
@@ -46,7 +48,10 @@ permission:
     "*.env.sample": allow
   path_write:
     "*": deny
-    "/dev/null": allow   # stderr discards are kernel-dropped; the reflex `2>/dev/null` must not die on the deny-all
+    # stderr discards are kernel-dropped; the reflex `2>/dev/null` must not
+    # die on the deny-all. NOTE: pps's frontmatter parser keeps inline text
+    # after the value as the value, so comments must stay on their own lines.
+    "/dev/null": allow
     "~/.pi/plans/*": allow
     ".pi/plans/*": allow
   external_directory_read: allow

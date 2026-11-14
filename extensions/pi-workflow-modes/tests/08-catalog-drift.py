@@ -12,9 +12,12 @@ Two shared blocks are pinned:
 
 Pass criteria in printed output:
   - the writer block (from `mcp: ask` to the end of the frontmatter) is
-    identical in both writer files
+    identical in both writer files (both carry the `ask_user_question` and
+    `mockup_choice` allow lines)
   - the read-only block (from `bash:` to the end of the frontmatter) is
     identical in all three read-only files
+  - all five personas name `ask_user_question: allow` and
+    `mockup_choice: allow` (user decision 2026-11-14)
   - no read-only file allows uniq or sed
 """
 import hashlib, os, sys
@@ -60,11 +63,27 @@ def compare(label, files, blocks):
                         break
     return ok
 
-writer_ok = compare("writers", WRITERS, {name: shared_block(name, WRITER_ANCHOR) for name in WRITERS})
+writer_blocks = {name: shared_block(name, WRITER_ANCHOR) for name in WRITERS}
+writer_ok = compare("writers", WRITERS, writer_blocks)
 reader_blocks = {name: shared_block(name, READER_ANCHOR) for name in READERS}
 reader_ok = compare("readers", READERS, reader_blocks)
 print("writer catalog identical:", "PASS" if writer_ok else "FAIL", flush=True)
 print("read-only surface identical:", "PASS" if reader_ok else "FAIL", flush=True)
+
+# User-interactive tools are accessible to ALL personas (user decision
+# 2026-11-14, reversing an earlier build-only lean): the writers get them via
+# the pinned block above, the deny-all readers only if each names them.
+TOOL_ACCESS = ("ask_user_question: allow", "mockup_choice: allow")
+missing = []
+for name in WRITERS + READERS:
+    text = open(os.path.join(AGENTS, name), encoding="utf-8").read()
+    for rule in TOOL_ACCESS:
+        if rule not in text:
+            missing.append(f"{name}: no '{rule}'")
+for gap in missing:
+    print("TOOL ACCESS GAP:", gap, flush=True)
+print("ask_user_question + mockup_choice allowed in all personas:",
+      "PASS" if not missing else "FAIL", flush=True)
 
 leaks = []
 for name, block in reader_blocks.items():
@@ -77,4 +96,4 @@ if leaks:
         print("READ-ONLY WRITER LEAK:", leak, flush=True)
 print("no uniq/sed in read-only surface:", "PASS" if not leaks else "FAIL", flush=True)
 
-sys.exit(0 if writer_ok and reader_ok and not leaks else 1)
+sys.exit(0 if writer_ok and reader_ok and not missing and not leaks else 1)

@@ -15,6 +15,20 @@
 - Scenario 05 gains R13 (`cat file 2>/dev/null` must run, no dialog) and R14
   (`2>file` still blocked); both feed the PASS line. README carve-out
   section documents the stderr-redirect behaviour.
+- Follow-up same day: the first deployment of the rule was inert, and R13
+  caught it. pps's `parseSimpleYamlMap` only skips WHOLE-LINE comments, so an
+  inline `allow   # note` parses the comment into the rule value, the action
+  fails the allow|deny|ask validation and the entry is dropped tolerantly,
+  leaving the deny-all to decide. Comments in persona frontmatter must stay
+  on their own lines (a warning now sits in plan.md next to the rule).
+  Notably pps itself already models `/dev/null` as the discard device
+  (`path/safe-system-paths.ts`), so the allow matches upstream intent.
+- Persona sync for the user-interactive tools (`ask_user_question`,
+  `mockup_choice`): all five personas now name both with `allow`, seed and
+  deployed. (An earlier build-only lean was reversed same day by user
+  decision: any agent may put a question or a mockup pick to the user.)
+  Scenario 08 grew a TOOL ACCESS GAP check asserting all five carry both
+  lines, and its writer pin now simply requires both writers to hold them.
 
 ## 0.4.4 - 2026-11-13
 

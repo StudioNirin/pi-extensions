@@ -18,6 +18,8 @@ permission:
   glob: allow
   list: allow
   todowrite: allow
+  ask_user_question: allow
+  mockup_choice: allow
   webfetch: allow
   write: deny
   edit: deny
@@ -50,7 +52,10 @@ permission:
     "*.env.sample": allow
   path_write:
     "*": deny
-    "/dev/null": allow   # stderr discards are kernel-dropped; the reflex `2>/dev/null` must not die on the deny-all
+    # stderr discards are kernel-dropped; the reflex `2>/dev/null` must not
+    # die on the deny-all. NOTE: pps's frontmatter parser keeps inline text
+    # after the value as the value, so comments must stay on their own lines.
+    "/dev/null": allow
   external_directory_read: allow
   external_directory_write: deny
   bash:
