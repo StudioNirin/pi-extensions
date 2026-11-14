@@ -34,9 +34,11 @@
   pi's built-in `webfetch`, which stays). All five personas gained
   `web_search: allow` and `web_fetch: allow`, seed and deployed, and
   scenario 08's TOOL_ACCESS pin covers all four user-facing tools.
-  `web_fetch` works keyless; `web_search` needs a provider and API key via
-  `/web-tools` (stored in `~/.config/rpiv-web-tools/config.json`) or env
-  vars, so it is not yet usable on this box until a backend is configured.
+  `web_fetch` works keyless; `web_search` resolves its provider and key from
+  the same config (or env vars). Backend configured 2026-11-14: `tavily`,
+  account created via the tvly CLI OAuth flow, key written to
+  `~/.config/rpiv-web-tools/config.json` (0600), live round-trip verified
+  through a pi RPC session (provider: Tavily, real results).
 
 ## 0.4.4 - 2026-11-13
 
