@@ -99,7 +99,10 @@ Verified by scenario 05:
   `cat > <cwd>/.pi/plans/x.md` works and `cat > <cwd>/x.md` is denied. It is pps's
   rule though, not this extension's: the `tool_call` blocker only inspects
   `write`/`edit` paths, so the redirect stays inside the carve-out exactly as
-  long as `path_write` says it does.
+  long as `path_write` says it does. The same extraction gates stderr
+  redirects, so `grep x file 2>/dev/null` would die on the deny-all like any
+  other write; the personas therefore carry `"/dev/null": allow`. That is the
+  one exact-path exception: `2>some-file` stays denied (scenario 05 R13/R14).
 - Two different messages, both correct. A command whose effect pps cannot
   classify reports a **path** denial naming the directory; a bare relative
   filename is not a path candidate at all (only absolute, `~/`, `..`-bearing,

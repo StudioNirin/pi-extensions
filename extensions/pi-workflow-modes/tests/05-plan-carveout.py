@@ -26,6 +26,8 @@ Pass criteria in printed output:
     write tool cannot. R11 has no verdict on purpose: whichever way a plain
     redirect inside the plan dirs behaves is the shape worth documenting, not the
     one worth breaking.
+  - stderr redirects (R13, R14): `cat file 2>/dev/null` must run silently
+    (persona-level `"/dev/null": allow`), while `2>some-file` stays denied.
   - ZERO permission_request.waiting / Permission dialogs during the whole run
 """
 import json, os, re, subprocess, sys, threading, time
@@ -52,6 +54,13 @@ PROBES = {
 for path in PROBES.values():
     try: os.remove(path)
     except OSError: pass
+# Stable read target for R13/R14 (deliberately not in PROBES: it is not a
+# permission probe itself, and its content doubles as the R13 marker).
+READ_TARGET = os.path.join(CWD, "wf05-read-target.txt")
+R14_LOG = os.path.join(CWD, "wf05-stderr.log")
+open(READ_TARGET, "w").write("WF05R13RAN\n")
+try: os.remove(R14_LOG)
+except OSError: pass
 # The deep parent exists up front so R8 answers the permission question only,
 # not whether the write tool creates intermediate directories.
 os.makedirs(os.path.join(CWD, ".pi", "plans", "nested"), exist_ok=True)
@@ -179,6 +188,23 @@ s.turn("Call the bash tool exactly once with this command, unchanged, then quote
 print("R12 bash redirect OUTSIDE the plan dirs blocked (no file):",
       not os.path.exists(PROBES["redir_outside"]), flush=True)
 
+# R13/R14: stderr redirects. Redirect targets are always extracted as path
+# candidates and gated on the write surface, so the reflex `2>/dev/null` died
+# on path_write "*": deny (observed in the field: a plain grep for
+# 2026-11-14T00:27:06Z, decidingPath /dev/null). The personas now allow the
+# exact path /dev/null, which is a kernel-discarded write and leaks nothing.
+# R14 is the guard that the allow is that one path and not a wildcard: the
+# same redirect to a real file must still be denied, or "read-only" persona
+# could write any file that tolerates stderr junk.
+s.turn("Call the bash tool exactly once with this command, unchanged, then quote "
+       "the raw result verbatim:\ncat wf05-read-target.txt 2>/dev/null")
+r13 = any("WF05R13RAN" in l for l in s.lines)
+print("R13 bash 2>/dev/null discard allowed (marker seen):", r13, flush=True)
+s.turn("Call the bash tool exactly once with this command, unchanged, then quote "
+       "the raw result verbatim:\ncat wf05-read-target.txt 2>wf05-stderr.log")
+print("R14 bash 2>real-file still blocked (no file):",
+      not os.path.exists(R14_LOG), flush=True)
+
 waiting = sum(1 for l in s.lines if "permission_request.waiting" in l)
 print("R5 ZERO permission_request.waiting:", waiting == 0, f"(seen {waiting})", flush=True)
 print("R6 ZERO permission dialogs:", len(DIALOGS) == 0, f"(seen {len(DIALOGS)})", flush=True)
@@ -195,6 +221,8 @@ print("PASS" if (
     and not os.path.exists(PROBES["cwd_plans_bash"])
     and os.path.exists(PROBES["cwd_plans_mk"])
     and os.path.exists(PROBES["home_plans"])
+    and r13
+    and not os.path.exists(R14_LOG)
     and waiting == 0 and not DIALOGS
 ) else "FAIL", flush=True)
 print("leftover probe files:", files, flush=True)

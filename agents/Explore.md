@@ -50,6 +50,7 @@ permission:
     "*.env.sample": allow
   path_write:
     "*": deny
+    "/dev/null": allow   # stderr discards are kernel-dropped; the reflex `2>/dev/null` must not die on the deny-all
   external_directory_read: allow
   external_directory_write: deny
   bash:

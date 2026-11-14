@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.5 - 2026-11-14
+
+**Read-only personas now allow writes to `/dev/null` only.**
+
+- Field denial: a plain `grep ... 2>/dev/null` in plan mode was blocked on
+  `path_write` with decidingPath `/dev/null` (pps extracts redirect targets,
+  including `2>`, and gates them as writes; the persona deny-all then wins).
+  Every model emits `2>/dev/null` reflexively, so this was steady friction.
+- `plan`, `ask` and `Explore` personas gain `"/dev/null": allow` in
+  `path_write`: the kernel discards those bytes, no rule relaxation leaks
+  anything. It is deliberately the exact path, not a wildcard, so stderr to
+  a real file remains denied.
+- Scenario 05 gains R13 (`cat file 2>/dev/null` must run, no dialog) and R14
+  (`2>file` still blocked); both feed the PASS line. README carve-out
+  section documents the stderr-redirect behaviour.
+
 ## 0.4.4 - 2026-11-13
 
 **Breaking for the project-local plan directory.** `<cwd>/.plans/` is renamed to

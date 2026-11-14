@@ -1,9 +1,15 @@
 {
   "name": "pi-extensions",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "private": true,
   "description": "One pi-package carrying the workflow-modes and deny-only security-floor extensions, for pi and PiChamber",
-  "keywords": ["pi-package", "pi", "pi-extension", "permissions", "workflow"],
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "permissions",
+    "workflow"
+  ],
   "license": "MIT",
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
