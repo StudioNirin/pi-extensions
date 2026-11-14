@@ -20,6 +20,8 @@ permission:
   todowrite: allow
   ask_user_question: allow
   mockup_choice: allow
+  web_search: allow
+  web_fetch: allow
   webfetch: allow
   write: deny
   edit: deny

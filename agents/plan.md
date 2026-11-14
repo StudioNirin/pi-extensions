@@ -15,6 +15,8 @@ permission:
   todowrite: allow
   ask_user_question: allow
   mockup_choice: allow
+  web_search: allow
+  web_fetch: allow
   # Plan-file carve-out: write/edit stay available so plan documents can be
   # authored, but every path outside the two plan directories is denied.
   write: allow

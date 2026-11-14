@@ -29,6 +29,14 @@
   decision: any agent may put a question or a mockup pick to the user.)
   Scenario 08 grew a TOOL ACCESS GAP check asserting all five carry both
   lines, and its writer pin now simply requires both writers to hold them.
+- rpiv web tools (`npm:@juicesharp/rpiv-web-tools`, installed floating
+  2026-11-14): registers `web_search` and `web_fetch` (distinct names from
+  pi's built-in `webfetch`, which stays). All five personas gained
+  `web_search: allow` and `web_fetch: allow`, seed and deployed, and
+  scenario 08's TOOL_ACCESS pin covers all four user-facing tools.
+  `web_fetch` works keyless; `web_search` needs a provider and API key via
+  `/web-tools` (stored in `~/.config/rpiv-web-tools/config.json`) or env
+  vars, so it is not yet usable on this box until a backend is configured.
 
 ## 0.4.4 - 2026-11-13
 
